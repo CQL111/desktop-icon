@@ -1,0 +1,253 @@
+/* ball.css - 悬浮球样式 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  /* 关键：body 整层点击穿透，让桌面应用能正常接收鼠标事件 */
+  pointer-events: none;
+}
+
+.ball {
+  /* 关键：球本身可以点击；由 JS 控制位置（CSS transform） */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-user-select: none;
+  user-select: none;
+  /* 颜色由 JS 通过 CSS 变量注入；默认粉色作为兜底 */
+  background: radial-gradient(
+    circle at 35% 30%,
+    var(--ball-light, #fff5f8) 0%,
+    var(--ball-mid, #ffc6d5) 40%,
+    var(--ball-dark, #ff8aa3) 100%
+  );
+  box-shadow:
+    0 6px 16px var(--ball-shadow, rgba(255, 100, 130, 0.35)),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.15),
+    inset 0 4px 8px rgba(255, 255, 255, 0.5);
+  transition:
+    box-shadow 0.15s ease,
+    background 0.6s ease;
+  /* transform 不在这里 transition，避免和动画的 transform 冲突 */
+  overflow: visible;
+  z-index: 1;
+}
+
+.ball:hover {
+  box-shadow:
+    0 8px 20px var(--ball-shadow, rgba(255, 100, 130, 0.45)),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.15),
+    inset 0 4px 8px rgba(255, 255, 255, 0.5);
+}
+
+/* :active 用 box-shadow 而不是 transform，避免和位置的 translate 冲突 */
+.ball:active {
+  box-shadow:
+    0 4px 10px var(--ball-shadow, rgba(255, 100, 130, 0.5)),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.15),
+    inset 0 4px 8px rgba(255, 255, 255, 0.5);
+}
+
+.ball-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.face {
+  width: 70%;
+  height: 70%;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  position: absolute;
+}
+
+.face-laugh, .face-smile, .face-neutral, .face-cry {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.ball-inner[data-mood="laugh"] .face-laugh {
+  opacity: 1;
+  transform: scale(1);
+}
+.ball-inner[data-mood="smile"] .face-smile {
+  opacity: 1;
+  transform: scale(1);
+}
+.ball-inner[data-mood="neutral"] .face-neutral {
+  opacity: 1;
+  transform: scale(1);
+}
+.ball-inner[data-mood="cry"] .face-cry {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 高光 */
+.ball-shine {
+  position: absolute;
+  top: 8%;
+  left: 18%;
+  width: 28%;
+  height: 22%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+  pointer-events: none;
+}
+
+/* 点击弹出动画 */
+@keyframes bounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+.ball.bouncing {
+  animation: bounce 0.35s ease;
+}
+
+/* 呼吸感（应用在 ball-inner 上，避免和 .ball 的位置 transform 冲突） */
+@keyframes breath {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.02); }
+}
+.ball.idle .ball-inner {
+  animation: breath 3s ease-in-out infinite;
+}
+
+/* 中心爆炸：scale 弹跳（在 .ball-inner 上跑，不动 .ball 的位置 translate） */
+@keyframes explode {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.7); }
+  60%  { transform: scale(1.15); }
+  80%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.ball.exploding .ball-inner {
+  animation: explode 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes flashBurst {
+  0%   { opacity: 0;    transform: scale(0.4); }
+  20%  { opacity: 0.95; transform: scale(1); }
+  100% { opacity: 0;    transform: scale(2.6); }
+}
+.ball-flash {
+  position: absolute;
+  inset: -60%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 220, 200, 0.5) 30%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  pointer-events: none;
+  opacity: 0;
+  z-index: 10;
+}
+.ball.exploding .ball-flash {
+  animation: flashBurst 0.5s ease-out;
+}
+
+/* 全屏爆破：白光亮一下，覆盖整个屏幕（不影响 click-through） */
+.screen-flash {
+  /* 用 absolute + vw/vh 显式指定尺寸，避免 fixed + transform 的 containing block 陷阱 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 100;
+  background-image: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 240, 0.8) 15%,
+    rgba(255, 230, 210, 0.5) 35%,
+    rgba(255, 255, 255, 0) 75%
+  );
+  background-position: center;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+.screen-flash.active {
+  animation: screenFlash 0.7s cubic-bezier(0.2, 0, 0.2, 1);
+}
+/* 用 background-size 动画模拟"从中心炸开"的效果，避开 transform */
+@keyframes screenFlash {
+  0%   { opacity: 0; background-size: 30% 30%; }
+  20%  { opacity: 1; background-size: 100% 100%; }
+  100% { opacity: 0; background-size: 160% 160%; }
+}
+
+/* ---------- 签圆点（hover 浮现） ---------- */
+.sign-chips {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* 整体不响应，子元素单独打开 */
+  /* 4 个圆点的中心坐标（相对 80x80 球，中心在 40,40） */
+}
+.sign-chip {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1.5px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto; /* 单独接收点击 */
+  /* 默认隐藏 + 缩小 */
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* 4 个位置：上 / 右 / 下 / 左 */
+.sign-chip[data-scope="moment"]   { left: 28px; top:  -32px; transition-delay: 0.00s; }
+.sign-chip[data-scope="today"]    { left: 88px; top:  28px;  transition-delay: 0.04s; }
+.sign-chip[data-scope="tomorrow"] { left: 28px; top:  88px;  transition-delay: 0.08s; }
+.sign-chip[data-scope="week"]     { left: -32px; top: 28px;  transition-delay: 0.12s; }
+
+.sign-chip:hover {
+  background: rgba(255, 255, 245, 1);
+  transform: scale(1.15) !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* hover 球时，4 个圆点淡入 + 弹起 */
+.ball:hover .sign-chip {
+  opacity: 1;
+  transform: scale(1);
+}
+.ball:not(:hover) .sign-chip {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+/* 抽签动画进行中不显示 chip（避免误触） */
+.ball.exploding .sign-chips,
+.ball.idle .sign-chips { /* idle 时仍保留 hover 浮现逻辑 */ }

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' https://api.minimax.io https://api.minimaxi.chat https://api.minimaxi.com https://api.minimaxi.com;">
+  <title>今日运势</title>
+  <link rel="stylesheet" href="styles/ball.css">
+</head>
+<body>
+  <div id="ball" class="ball">
+    <div id="ball-inner" class="ball-inner" data-mood="smile">
+      <!-- 表情通过 inline SVG 注入，避免依赖外部资源 -->
+      <!-- 大笑 (5 星): 眯眼 + 大张嘴 + 红晕 -->
+      <svg class="face face-laugh" viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M16 26 Q22 18 28 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M36 26 Q42 18 48 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M20 38 Q32 52 44 38 Q44 48 32 50 Q20 48 20 38 Z" fill="#3a2a1f"/>
+        <ellipse cx="11" cy="36" rx="3.5" ry="2.5" fill="#ff8aa3" opacity="0.8"/>
+        <ellipse cx="53" cy="36" rx="3.5" ry="2.5" fill="#ff8aa3" opacity="0.8"/>
+      </svg>
+      <!-- 微笑 (4 星): 普通眼睛 + 浅笑弧 -->
+      <svg class="face face-smile" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="22" cy="26" r="3" fill="#3a2a1f"/>
+        <circle cx="42" cy="26" r="3" fill="#3a2a1f"/>
+        <path d="M22 42 Q32 48 42 42" stroke="#3a2a1f" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+      </svg>
+      <!-- 不笑 (3-2 星): 普通眼睛 + 平嘴 -->
+      <svg class="face face-neutral" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="22" cy="26" r="3.5" fill="#3a2a1f"/>
+        <circle cx="42" cy="26" r="3.5" fill="#3a2a1f"/>
+        <line x1="22" y1="42" x2="42" y2="42" stroke="#3a2a1f" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <!-- 哭 (1 星): 皱眉眼睛 + 嘴下弧 + 泪滴 -->
+      <svg class="face face-cry" viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M16 26 Q22 22 28 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M36 26 Q42 22 48 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M20 48 Q32 38 44 48" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <ellipse cx="16" cy="36" rx="2" ry="3" fill="#5cb8ff" opacity="0.9"/>
+        <ellipse cx="48" cy="36" rx="2" ry="3" fill="#5cb8ff" opacity="0.9"/>
+      </svg>
+    </div>
+    <div class="ball-shine"></div>
+    <div class="ball-flash"></div>
+    <!-- 球周围可选签：默认隐藏，hover 球时浮现 -->
+    <div class="sign-chips" id="sign-chips">
+      <button class="sign-chip" data-scope="moment"   title="此刻运势">⏰</button>
+      <button class="sign-chip" data-scope="today"    title="今日运势">☀️</button>
+      <button class="sign-chip" data-scope="tomorrow" title="明日运势">🌙</button>
+      <button class="sign-chip" data-scope="week"     title="本周运势">📅</button>
+    </div>
+  </div>
+  <!-- 全屏爆破 flash：覆盖整个屏幕，pointer-events:none 不影响点击穿透 -->
+  <div id="screen-flash" class="screen-flash"></div>
+  <script src="js/rendererLogger.js"></script>
+  <script src="js/ball.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "fortune-ball",
+  "version": "0.1.0",
+  "main": "main.js",
+  "description": "桌面悬浮球 - 点击查看今日运势",
+  "scripts": {
+    "start": "electron .",
+    "start:hidden": "electron . --hidden"
+  },
+  "keywords": ["electron", "fortune", "desktop-widget"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^30.5.1"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  }
+}
