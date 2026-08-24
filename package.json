@@ -5,13 +5,21 @@
   "description": "桌面悬浮球 - 点击查看今日运势",
   "scripts": {
     "start": "electron .",
-    "start:hidden": "electron . --hidden"
+    "start:hidden": "electron . --hidden",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
   },
-  "keywords": ["electron", "fortune", "desktop-widget"],
+  "keywords": [
+    "electron",
+    "fortune",
+    "desktop-widget"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^30.5.1"
+    "electron": "^30.5.1",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "electron-store": "^8.2.0"

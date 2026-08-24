@@ -1,6 +1,8 @@
 // behavior.js - 行为打分与风格选择
 // 在主进程被 require：它只依赖传入的 behavior 对象
 
+const logger = require('./logger');
+
 const STYLES = ['traditional', 'modern', 'lots', 'tarot', 'personalized'];
 const HALF_LIFE_DAYS = 14;          // 14 天半衰期
 const LAMBDA = Math.LN2 / HALF_LIFE_DAYS;
@@ -49,11 +51,14 @@ function softmaxSample(scores) {
 function pickStyle(behavior, now = Date.now()) {
   const totalClicks = STYLES.reduce((sum, s) => sum + ((behavior[s] && behavior[s].clicks) || 0), 0);
   if (totalClicks < MIN_INTERACTIONS_FOR_PERSONALIZED) {
-    // 均匀轮询：取 totalClicks 索引
-    return STYLES[totalClicks % STYLES.length];
+    const picked = STYLES[totalClicks % STYLES.length];
+    logger.info('behavior.pick', `coldStart=true totalClicks=${totalClicks} style=${picked}`);
+    return picked;
   }
   const scores = scoreAll(behavior, now);
-  return softmaxSample(scores);
+  const picked = softmaxSample(scores);
+  logger.info('behavior.pick', `coldStart=false style=${picked}`, { scores });
+  return picked;
 }
 
 // 记录一次交互：调用方把 view_seconds 累加进来
@@ -63,6 +68,7 @@ function recordInteraction(behavior, style, durationSeconds = 0) {
   cur.view_seconds = (cur.view_seconds || 0) + Math.max(0, Math.floor(durationSeconds));
   cur.last_seen = Date.now();
   behavior[style] = cur;
+  logger.info('behavior.record', `style=${style} duration=${durationSeconds}s clicks=${cur.clicks}`);
   return cur;
 }
 

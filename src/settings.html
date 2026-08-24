@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.minimax.io https://api.minimaxi.chat https://api.minimaxi.com https://api.minimaxi.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.minimax.io https://api.minimaxi.chat https://api.minimaxi.com https://api.deepseek.com;">
   <title>设置</title>
   <link rel="stylesheet" href="styles/settings.css">
 </head>
@@ -10,28 +10,35 @@
   <div class="settings">
     <h1>设置</h1>
 
+    <div id="llm-status" class="llm-status">检测中…</div>
+
     <section class="section">
-      <h2>AI 运势解读</h2>
-      <p class="hint">未配置也能正常使用内置 5 种运势；配置后可在卡片底部看到 AI 解读，或在球上右键提问。</p>
+      <h2>AI 模型</h2>
+      <p class="hint">默认使用线上 DeepSeek 模型，无需配置。你也可以切换到自己本机的本地模型。</p>
 
       <label>
-        <span>API 地址</span>
-        <input id="baseUrl" type="text" placeholder="https://api.minimaxi.com/anthropic" autocomplete="off">
-        <small>Anthropic 兼容（推荐）：<code>https://api.minimaxi.com/anthropic</code><br>OpenAI 兼容：<code>https://api.minimaxi.com/v1</code></small>
-      </label>
-
-      <label>
-        <span>API Token</span>
-        <input id="token" type="password" placeholder="eyJhbGciOi..." autocomplete="off">
-        <small>Token 仅本机加密存储，不会上传任何服务器</small>
+        <span>当前本地模型</span>
+        <select id="local-model-select">
+          <option value="">（使用线上 DeepSeek）</option>
+        </select>
+        <small id="local-model-hint">检测 Ollama 已安装模型…</small>
       </label>
 
       <div class="row">
-        <button id="save" class="btn primary">保存</button>
-        <button id="test" class="btn">测试连接</button>
-        <button id="clear" class="btn ghost">清除</button>
+        <button id="refresh" class="btn">刷新列表</button>
+        <button id="use-online" class="btn ghost">使用线上</button>
       </div>
-      <div id="status" class="status"></div>
+    </section>
+
+    <section class="section">
+      <h2>下载本地模型</h2>
+      <p class="hint">输入模型名（如 <code>qwen2.5:7b</code>、<code>llama3</code>），从 Ollama 下载到本机。</p>
+
+      <div class="row">
+        <input id="pull-name" type="text" placeholder="qwen2.5:7b" autocomplete="off">
+        <button id="pull" class="btn primary">下载</button>
+      </div>
+      <div id="pull-status" class="status"></div>
     </section>
 
     <section class="section">

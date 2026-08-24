@@ -60,16 +60,19 @@ async function submit() {
 
 // 主进程 IPC 钩子
 window.api.onAiInputFocus(() => {
+  window.logger.info('aiInput.event', 'focused');
   queryEl.value = '';
   queryEl.focus();
   setStatus('', '');
 });
 
 window.api.onAiInputLoading((loading) => {
+  window.logger.info('aiInput.event', `loading=${!!loading}`);
   setBusy(!!loading);
 });
 
 window.api.onAiInputError((err) => {
+  window.logger.warn('aiInput.event', `error kind=${err.kind || 'unknown'}`);
   setStatus('error', err.text || '出错了');
   setBusy(false);
   queryEl.focus();

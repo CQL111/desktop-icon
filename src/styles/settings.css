@@ -11,6 +11,19 @@ html, body {
   user-select: none;
 }
 .settings { padding: 24px; }
+.llm-status {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: #242832;
+  border: 1px solid #353a47;
+  color: #b8bcc5;
+  line-height: 1.5;
+}
+.llm-status.local { border-color: rgba(108, 212, 154, 0.4); background: rgba(108, 212, 154, 0.08); color: #6cd49a; }
+.llm-status.online { border-color: rgba(125, 200, 255, 0.4); background: rgba(125, 200, 255, 0.08); color: #7dc8ff; }
+.llm-status.none { border-color: rgba(255, 138, 138, 0.4); background: rgba(255, 138, 138, 0.08); color: #ff8a8a; }
 h1 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
 h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #d0d3da; }
 .section { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #2a2f3a; }
@@ -20,7 +33,7 @@ label { display: block; margin-bottom: 14px; }
 label span { display: block; margin-bottom: 6px; color: #b8bcc5; }
 label small { display: block; margin-top: 4px; color: #6c7280; font-size: 11px; }
 label small code { background: #2a2f3a; padding: 1px 5px; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; }
-input[type=text], input[type=password] {
+input[type=text], input[type=password], select {
   width: 100%;
   background: #242832;
   border: 1px solid #353a47;
@@ -32,8 +45,18 @@ input[type=text], input[type=password] {
   outline: none;
   transition: border-color 0.15s;
 }
-input:focus { border-color: #5cb8ff; }
-.row { display: flex; gap: 8px; margin-top: 8px; }
+select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238a8f99' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+input:focus, select:focus { border-color: #5cb8ff; }
+.row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.row input { flex: 1; }
 .btn {
   background: #2a2f3a;
   color: #e7e9ee;

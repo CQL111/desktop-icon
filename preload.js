@@ -45,11 +45,12 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('reset-ball', listener);
   },
 
-  // ---------- AI 设置 ----------
-  getAiConfig: () => ipcRenderer.invoke('get-ai-config'),
-  saveAiConfig: (payload) => ipcRenderer.invoke('save-ai-config', payload),
-  testAiConnection: (payload) => ipcRenderer.invoke('test-ai-connection', payload),
+  // ---------- 模型管理 ----------
   openSettings: () => ipcRenderer.invoke('open-settings'),
+  getLlmStatus: () => ipcRenderer.invoke('get-llm-status'),
+  getLocalModels: () => ipcRenderer.invoke('get-local-models'),
+  setLocalModel: (name) => ipcRenderer.invoke('set-local-model', name),
+  pullLocalModel: (name) => ipcRenderer.invoke('pull-local-model', name),
 
   // ---------- AI 输入浮窗 ----------
   openAiInput: () => ipcRenderer.invoke('open-ai-input'),

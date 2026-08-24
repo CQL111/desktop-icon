@@ -1,6 +1,6 @@
 // main.js - 主进程
 // 桌面悬浮球 - 今日运势
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, safeStorage, Notification, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, Notification, shell } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const behavior = require('./src/js/behavior');
@@ -8,6 +8,9 @@ const fortune = require('./src/js/fortune');
 const ai = require('./src/js/ai');
 const logger = require('./src/js/logger');
 const LogWatcher = require('./src/js/watcher');
+const selfCheck = require('./src/js/selfCheck');
+const localLLM = require('./src/js/localLLM');
+const onlineConfig = require('./src/js/onlineConfig');
 
 // Windows 通知必须先设 appId（在 ready 之前）
 app.setAppUserModelId('com.fortune.ball');
@@ -29,7 +32,8 @@ const store = new Store({
     todayFortune: {},      // { 'yyyy-mm-dd': { style, score, data } }
     behavior: {},          // { styleName: { clicks, view_seconds, last_seen } }
     manualSwitchCount: 0,  // 用户主动"换一换"计数（每 5 次临时降权被切走的风格）
-    aiConfig: { baseUrl: '', encryptedToken: null, tokenObfuscated: null },
+    aiConfig: { baseUrl: '', encryptedToken: null, tokenObfuscated: null, model: '' },
+    localModel: '',         // 用户选择的本地模型名（空 = 用线上）
     aiCache: {},           // { 'yyyy-mm-dd': { style: { text, usage, ts } } }
     aiAskCache: {},        // { hash: { text, ts } }
     momentCache: {},       // { 'moment|yyyy-mm-dd|hhKey': { score, data, ts } }
@@ -53,52 +57,23 @@ const CARD_WIDTH = 380;
 const CARD_HEIGHT = 600;
 const CARD_OFFSET = 12; // 卡片距球的偏移
 
-// ---------- AI Token 安全存储 ----------
-// safeStorage 在 Linux 无 keyring 时不可用，降级到 base64（仅作"非明文"展示）
-const safeStorageOK = safeStorage.isEncryptionAvailable();
-let cachedToken = null; // 进程内明文缓存，避免每次 IPC 都解密
-
-function encryptToken(plain) {
-  if (!plain) return null;
-  if (safeStorageOK) return safeStorage.encryptString(plain).toString('base64');
-  return Buffer.from(plain, 'utf8').toString('base64');
-}
-
-function decryptToken(encryptedBase64) {
-  if (!encryptedBase64) return null;
-  try {
-    const buf = Buffer.from(encryptedBase64, 'base64');
-    if (safeStorageOK) return safeStorage.decryptString(buf);
-    return buf.toString('utf8');
-  } catch (e) {
-    console.error('解密 token 失败:', e.message);
-    logger.error('crypto', `decrypt failed: ${e.message}`);
-    return null;
+// 统一 AI 配置入口：线上优先（默认硬编码 DeepSeek；用户主动启用本地才用本地）
+async function resolveAiConfig() {
+  const localModel = store.get('localModel') || '';
+  if (localModel) {
+    const ok = await localLLM.checkLocal();
+    if (ok) {
+      return {
+        baseUrl: localLLM.LOCAL_BASE_URL,
+        token: localLLM.LOCAL_TOKEN,
+        model: localModel,
+        source: 'local',
+      };
+    }
+    logger.warn('resolveAiConfig', `local model "${localModel}" configured but Ollama unavailable, fallback to online`);
   }
+  return { ...onlineConfig, source: 'online' };
 }
-
-function getAiConfigFromStore() {
-  const cfg = store.get('aiConfig') || {};
-  const baseUrl = cfg.baseUrl || '';
-  const encryptedToken = cfg.encryptedToken || null;
-  return {
-    baseUrl: ai.normalizeBaseUrl(baseUrl || 'https://api.minimax.io/v1'),
-    hasToken: !!encryptedToken,
-  };
-}
-
-function getDecryptedAiConfig() {
-  const cfg = store.get('aiConfig') || {};
-  if (cachedToken) {
-    return { baseUrl: ai.normalizeBaseUrl(cfg.baseUrl), token: cachedToken };
-  }
-  const token = decryptToken(cfg.encryptedToken);
-  cachedToken = token;
-  return { baseUrl: ai.normalizeBaseUrl(cfg.baseUrl), token };
-}
-
-// 启动时把解密结果预热一次（避免首次 IPC 阻塞）
-getDecryptedAiConfig();
 
 // 启动参数：--hidden 用于开机自启时不显示球
 const startHidden = process.argv.includes('--hidden');
@@ -193,6 +168,16 @@ function _createBallWindowImpl() {
 // 缓存最近的球的屏幕坐标（用于卡片定位）
 let lastBallScreenPos = { x: 0, y: 0 };
 
+// 球的实时屏幕坐标 = 窗口原点 + transform 偏移（不依赖上次抽签位置）
+// 返回整数（Electron setPosition / BrowserWindow 要求整数，浮点会 conversion failure）
+function getBallScreenPos() {
+  const b = ballWindow && !ballWindow.isDestroyed() ? ballWindow.getBounds() : { x: 0, y: 0 };
+  return {
+    x: Math.round(b.x + (currentBallPos.x || 0)),
+    y: Math.round(b.y + (currentBallPos.y || 0)),
+  };
+}
+
 // 根据球的屏幕坐标计算卡片的目标位置（不直接应用）
 function computeCardPosition(ballScreenX, ballScreenY) {
   const work = screen.getPrimaryDisplay().workArea;
@@ -206,7 +191,7 @@ function computeCardPosition(ballScreenX, ballScreenY) {
     cardY = work.y + work.height - CARD_HEIGHT;
   }
   if (cardY < work.y) cardY = work.y;
-  return { x: cardX, y: cardY };
+  return { x: Math.round(cardX), y: Math.round(cardY) };
 }
 
 function createCardWindow(ballScreenX, ballScreenY) {
@@ -359,8 +344,8 @@ function _createAiInputWindowImpl() {
     return aiInputWindow;
   }
   aiInputWindow = new BrowserWindow({
-    width: 360,
-    height: 140,
+    width: 380,
+    height: 190,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -396,7 +381,7 @@ function positionAiInputNearBall() {
   if (!aiInputWindow || aiInputWindow.isDestroyed()) return;
   const bounds = ballWindow.getBounds();
   const work = screen.getPrimaryDisplay().workArea;
-  const w = 360, h = 140;
+  const w = 380, h = 190;
   // 默认放在球右上
   let x = bounds.x + currentBallPos.x + BALL_SIZE + 8;
   let y = bounds.y + currentBallPos.y - 20;
@@ -634,7 +619,8 @@ function registerIpc() {
   // renderer 同步球的当前 transform 位置给主进程（用于 ignore-mouse 决策）
   handle('update-ball-pos', (_e, x, y) => {
     if (typeof x === 'number' && typeof y === 'number') {
-      currentBallPos = { x, y };
+      // 取整，避免浮点坐标传给 Electron 原生方法（setPosition/BrowserWindow）导致 conversion failure
+      currentBallPos = { x: Math.round(x), y: Math.round(y) };
     }
     return true;
   });
@@ -834,35 +820,32 @@ function registerIpc() {
     return true;
   });
 
-  // ---------- AI 设置 ----------
-  handle('get-ai-config', () => ({
-    ...getAiConfigFromStore(),
-    safeStorageAvailable: safeStorageOK,
-  }));
+  // ---------- 模型管理（线上硬编码 + 本地可切换/下载）----------
 
-  handle('save-ai-config', (_e, payload = {}) => {
-    const old = store.get('aiConfig') || {};
-    const next = { ...old };
-    if (typeof payload.baseUrl === 'string') next.baseUrl = payload.baseUrl.trim();
-    // token：空字符串视为"清除"
-    if (typeof payload.token === 'string') {
-      if (payload.token.length > 0) {
-        next.encryptedToken = encryptToken(payload.token);
-        cachedToken = payload.token; // 同步内存缓存
-      } else {
-        next.encryptedToken = null;
-        cachedToken = null;
-      }
-    }
-    store.set('aiConfig', next);
+  // 返回当前生效的模型来源（只读状态，供设置面板展示）
+  handle('get-llm-status', async () => {
+    const cfg = await resolveAiConfig();
+    return { source: cfg.source, model: cfg.model, baseUrl: cfg.baseUrl };
+  });
+
+  // 列出 Ollama 已装模型
+  handle('get-local-models', async () => {
+    return await localLLM.listModels();
+  });
+
+  // 设置本地模型名（空 = 清除，回到线上）
+  handle('set-local-model', (_e, name) => {
+    const v = typeof name === 'string' ? name.trim() : '';
+    store.set('localModel', v);
+    logger.info('localModel', `set to "${v}"`);
     return true;
   });
 
-  handle('test-ai-connection', async (_e, payload = {}) => {
-    return await ai.testConnection({
-      baseUrl: payload.baseUrl || getDecryptedAiConfig().baseUrl,
-      token: payload.token || getDecryptedAiConfig().token,
-    });
+  // 下载本地模型（Ollama pull）
+  handle('pull-local-model', async (_e, name) => {
+    const result = await localLLM.pullModel(name);
+    logger.info('localModel', `pull "${name}" ok=${result.ok}`);
+    return result;
   });
 
   handle('open-settings', () => {
@@ -896,7 +879,7 @@ function registerIpc() {
     const query = (payload.query || '').trim();
     if (!query) return { ok: false, error: 'EMPTY_QUERY' };
 
-    const aiCfg = getDecryptedAiConfig();
+    const aiCfg = await resolveAiConfig();
     if (!aiCfg.token) {
       if (aiInputWindow && !aiInputWindow.isDestroyed()) {
         aiInputWindow.webContents.send('ai-input-error', {
@@ -997,7 +980,8 @@ function friendlyError(code) {
 
 // 弹出只含 AI 解读的卡片（无 5 种内置主体）
 function showAiCardOnly(userQuery, aiText) {
-  const win = createCardWindow(lastBallScreenPos.x, lastBallScreenPos.y);
+  const pos = getBallScreenPos();
+  const win = createCardWindow(pos.x, pos.y);
   win._stayOpen = true;
   cardCurrentStyle = 'ai-ask';
   const fakeFortune = {
@@ -1013,7 +997,7 @@ function showAiCardOnly(userQuery, aiText) {
 
 // ---------- 当次抽签后异步追加 AI 解读到卡片 ----------
 async function tryAppendAiInterpretation(style, score, fortuneData, dateKey) {
-  const aiCfg = getDecryptedAiConfig();
+  const aiCfg = await resolveAiConfig();
   if (!aiCfg.token) return; // 没 token 直接静默退出
 
   // 缓存命中（同一天同风格）→ 直接发
@@ -1145,6 +1129,18 @@ app.whenReady().then(() => {
   startCursorPolling();
   startWatcher();
 
+  // 启动 5 秒后跑一次自检（给窗口/托盘/快捷键留出初始化时间）
+  setTimeout(() => {
+    selfCheck.runSelfCheck({
+      logWatcher,
+      onlineConfig,
+      localLLM,
+      tray,
+      ballWindow,
+      globalShortcut,
+    }).catch((e) => logger.warn('selfCheck', `run failed: ${e.message}`));
+  }, 5000);
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createBallWindow();
   });
@@ -1214,7 +1210,7 @@ function registerLogIpc() {
 // ---------- LogWatcher + AI 诊断 ----------
 let logWatcher = null;
 async function runAiDiagnose(ctx) {
-  const aiCfg = getDecryptedAiConfig();
+  const aiCfg = await resolveAiConfig();
   if (!aiCfg.token) {
     logger.warn('watcher.diagnose', 'NO_TOKEN, skip AI', { category: ctx.category });
     return null;
