@@ -30,13 +30,14 @@ class LogWatcher {
   stop() {
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.pollTimer = null;
+    logger.info('watcher', 'stopped');
   }
 
   bootstrap() {
     // 启动时读全部历史，建立 offset
     const content = logger.readTodayLog();
     this.offset = content.split('\n').length - 1; // -1 因为末尾通常有 ''
-    this.lastFile = path.getLogDir ? path.getLogDir() : '';
+    this.lastFile = logger.getLogDir();
   }
 
   poll() {
@@ -79,7 +80,10 @@ class LogWatcher {
 
     // 冷却：同 category 5 分钟内只触发一次
     const lastTs = this.cooldownByCategory.get(cls.category) || 0;
-    if (Date.now() - lastTs < this.COOLDOWN_MS) return;
+    if (Date.now() - lastTs < this.COOLDOWN_MS) {
+      logger.info('watcher.cooldown', `category=${cls.category} skipped (${Math.round((Date.now() - lastTs) / 1000)}s ago)`);
+      return;
+    }
     this.cooldownByCategory.set(cls.category, Date.now());
 
     const ctx = {

@@ -83,4 +83,10 @@ function parseLevel(line) {
   return m ? m[2].toLowerCase() : null;
 }
 
+// 模块加载时打印一次规则数（仅主进程 console，避免依赖 logger 导致循环 require）
+// eslint-disable-next-line no-console
+if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
+  console.log(`[detector] loaded ${PATTERNS.length} patterns`);
+}
+
 module.exports = { classify, parseLevel, PATTERNS };

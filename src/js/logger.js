@@ -142,7 +142,10 @@ function write(level, scope, msg, meta) {
 }
 
 function setLevel(level) {
-  if (LEVELS[level]) currentLevel = LEVELS[level];
+  if (LEVELS[level]) {
+    currentLevel = LEVELS[level];
+    write('info', 'logger', `level set to ${level}`);
+  }
 }
 function getLevel() {
   return Object.keys(LEVELS).find((k) => LEVELS[k] === currentLevel);
@@ -181,7 +184,9 @@ function clearAll() {
     currentSize = 0;
     currentFile = null;
     return true;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 module.exports = {

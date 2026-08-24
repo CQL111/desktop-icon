@@ -23,20 +23,22 @@ const FALLBACK_MODEL = 'MiniMax-M2.7';
 function detectEndpoint(baseUrl) {
   // 先去掉 trailing slash
   let u = String(baseUrl || '').trim().replace(/\/+$/, '');
+  // 识别本地模型（Ollama / LM Studio 等 localhost 端点）
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(u);
 
   // 用户明确填了 Anthropic 路径 → 走 Anthropic 协议
   if (u.endsWith('/anthropic')) {
-    return { kind: 'anthropic', url: u + '/v1/messages' };
+    return { kind: 'anthropic', url: u + '/v1/messages', isLocal };
   }
   // 旧格式兜底（如果用户填了带 anthropic_api 字样的）
   if (u.includes('anthropic_api') || u.includes('anthropic-api')) {
     logger.warn('ai.endpoint', `fallback path: ${baseUrl}`);
-    return { kind: 'anthropic', url: u };
+    return { kind: 'anthropic', url: u, isLocal };
   }
 
   // OpenAI 路径：去掉末尾 /v\d+（如有），拼 /v1/chat/completions
   u = u.replace(/\/v\d+$/, '');
-  return { kind: 'openai', url: u + '/v1/chat/completions' };
+  return { kind: 'openai', url: u + '/v1/chat/completions', isLocal };
 }
 
 // ---------- System Prompts ----------
@@ -109,10 +111,12 @@ async function callLLM({
   maxTokens = 600,
   timeoutMs = 12000,
 }) {
-  if (!token) throw new Error('NO_TOKEN');
   if (!Array.isArray(messages) || messages.length === 0) throw new Error('NO_MESSAGES');
 
   const ep = detectEndpoint(baseUrl);
+  if (!token && !ep.isLocal) throw new Error('NO_TOKEN');
+  const startTs = Date.now();
+  logger.info('ai.callLLM', `kind=${ep.kind} model=${model} local=${ep.isLocal} timeout=${timeoutMs}`);
 
   // 拆 system / 其余 messages（Anthropic 协议要求 system 在顶级字段）
   let systemText = '';
@@ -142,8 +146,9 @@ async function callLLM({
       messages,
       temperature,
       max_tokens: maxTokens,
-      response_format: { type: 'json_object' },
     };
+    // 本地模型（qwen 等）对 json_object 支持不稳定，改在 prompt 里要求 JSON
+    if (!ep.isLocal) body.response_format = { type: 'json_object' };
   }
 
   const controller = new AbortController();
@@ -211,6 +216,7 @@ async function callLLM({
 
   if (!content) throw new Error('EMPTY_RESPONSE');
 
+  logger.info('ai.callLLM', `done ${Date.now() - startTs}ms tokens=${normalizedUsage.total_tokens || '?'}`);
   return {
     content,
     usage: normalizedUsage,
@@ -232,6 +238,7 @@ function extractText(content) {
     return JSON.stringify(obj);
   } catch {
     // 不是 JSON：直接当文本返回
+    logger.warn('ai.extractText', 'JSON parse failed, fallback to raw');
     return trimmed;
   }
 }
@@ -255,6 +262,7 @@ async function interpretFortune({
   ctx = {},
   aiConfig,
 }) {
+  logger.info('ai.interpretFortune', `style=${style}`);
   if (!aiConfig || !aiConfig.token) throw new Error('NO_TOKEN');
   const sysKey = SYSTEM_PROMPTS[style] ? style : 'personalized';
   const systemPrompt = SYSTEM_PROMPTS[sysKey];
@@ -276,6 +284,7 @@ async function interpretFortune({
     baseUrl: aiConfig.baseUrl,
     token: aiConfig.token,
     messages,
+    model: aiConfig.model || DEFAULT_MODEL,
     temperature: 0.75,
     maxTokens: 500,
     timeoutMs: 12000,
@@ -288,6 +297,7 @@ async function interpretFortune({
 
 // ---------- 解读：用户主动提问（右键浮窗） ----------
 async function interpretAsk({ userQuery, ctx = {}, aiConfig }) {
+  logger.info('ai.interpretAsk', `query length=${(userQuery || '').length}`);
   if (!aiConfig || !aiConfig.token) throw new Error('NO_TOKEN');
   if (!userQuery || !userQuery.trim()) throw new Error('EMPTY_QUERY');
 
@@ -306,6 +316,7 @@ async function interpretAsk({ userQuery, ctx = {}, aiConfig }) {
     baseUrl: aiConfig.baseUrl,
     token: aiConfig.token,
     messages,
+    model: aiConfig.model || DEFAULT_MODEL,
     temperature: 0.7,
     maxTokens: 500,
     timeoutMs: 12000,
@@ -317,7 +328,8 @@ async function interpretAsk({ userQuery, ctx = {}, aiConfig }) {
 }
 
 // ---------- 探测：测试连接 ----------
-async function testConnection({ baseUrl, token }) {
+async function testConnection({ baseUrl, token, model }) {
+  logger.info('ai.testConnection', `baseUrl=${baseUrl} model=${model || DEFAULT_MODEL}`);
   if (!token) return { ok: false, error: 'NO_TOKEN' };
   try {
     const result = await callLLM({
@@ -327,7 +339,7 @@ async function testConnection({ baseUrl, token }) {
         { role: 'system', content: '你是一个测试助手。' },
         { role: 'user', content: '请返回 {"text":"ok"}' },
       ],
-      model: DEFAULT_MODEL,
+      model: model || DEFAULT_MODEL,
       temperature: 0.1,
       maxTokens: 32,
       timeoutMs: 8000,
@@ -348,6 +360,7 @@ const DIAGNOSE_SYSTEM =
   '请严格按 JSON 返回：{"rootCause":"...","fix":"...","confidence":0.X}';
 
 async function diagnose({ line, recentLines = [], meta = {}, aiConfig, ctx = {} }) {
+  logger.info('ai.diagnose', `line=${(line || '').slice(0, 80)}`);
   if (!aiConfig || !aiConfig.token) throw new Error('NO_TOKEN');
 
   // 限制最近日志长度，避免爆 token
@@ -367,6 +380,7 @@ async function diagnose({ line, recentLines = [], meta = {}, aiConfig, ctx = {} 
     baseUrl: aiConfig.baseUrl,
     token: aiConfig.token,
     messages,
+    model: aiConfig.model || DEFAULT_MODEL,
     temperature: 0.3,
     maxTokens: 400,
     timeoutMs: 15000,

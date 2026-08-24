@@ -5,8 +5,20 @@
 (function () {
   if (!window.api) return;
 
+  // 限速：同一 scope 5 秒内最多 5 条，防止死循环刷爆日志
+  const rateLimitMap = new Map(); // scope → { count, resetAt }
+  function shouldRateLimit(scope) {
+    const now = Date.now();
+    const entry = rateLimitMap.get(scope) || { count: 0, resetAt: now + 5000 };
+    if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 5000; }
+    entry.count++;
+    rateLimitMap.set(scope, entry);
+    return entry.count > 5;
+  }
+
   function send(level, scope, msg, meta) {
     try {
+      if (shouldRateLimit(scope)) return;
       // meta 必须是 plain object；去掉 function / symbol / DOM 节点
       const safeMeta = {};
       if (meta && typeof meta === 'object') {

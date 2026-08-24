@@ -354,7 +354,6 @@ function render(style, fortune) {
 
   // 操作栏
   const actions = el('div', { class: 'actions' }, [
-    el('button', { class: 'action-btn primary', onclick: handleRedraw }, ['换一种风格']),
     el('button', { class: 'action-btn', onclick: handleClose }, ['关闭']),
   ]);
   content.appendChild(actions);

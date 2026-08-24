@@ -142,5 +142,20 @@ assert(typeof fortune.getIsoWeek(new Date()) === 'string', 'getIsoWeek 返回字
 const hourInfo = fortune.getHourInfo('申');
 assert(hourInfo && hourInfo.name === '申时', 'getHourInfo 申时正确');
 
+// ===== 第五阶段：detector 模式匹配 + 行为打分日志 =====
+const detector = require('./src/js/detector');
+assert(Array.isArray(detector.PATTERNS) && detector.PATTERNS.length >= 6, 'detector 有至少 6 条规则');
+assert(detector.classify('[T] [ERROR] [ai] HTTP_401', { status: 401 }).matched === true, 'detector 识别 auth');
+assert(detector.classify('[T] [ERROR] [ai] NETWORK refused', {}).category === 'network', 'detector 识别 network');
+assert(detector.classify('[T] [WARN] [x] nothing', {}).matched === false, 'detector 不误报 warn');
+assert(detector.parseLevel('[2026-08-21T10:00:00.000Z] [CRITICAL] [x] y') === 'critical', 'parseLevel critical');
+
+// behavior 打分仍正常（加了 logger 后不破坏逻辑）
+const behaviorMod = require('./src/js/behavior');
+const fakeBehavior = { traditional: { clicks: 5, view_seconds: 100, last_seen: Date.now() } };
+const pickedStyle = behaviorMod.pickStyle({ traditional: { clicks: 3, view_seconds: 0, last_seen: Date.now() } });
+assert(behaviorMod.STYLES.includes(pickedStyle), 'behavior.pickStyle 返回合法 style');
+assert(typeof behaviorMod.recordInteraction(fakeBehavior, 'modern', 5) === 'object', 'recordInteraction 返回对象');
+
 console.log(`\n总计: ${passed} 通过, ${failed} 失败`);
 process.exit(failed > 0 ? 1 : 0);
