@@ -317,6 +317,78 @@ function renderWeek(f) {
   return wrap;
 }
 
+// ---------- 个人测算 ----------
+function renderProfile(f) {
+  const wrap = el('div', { class: 'card-content card-bg-profile' });
+
+  wrap.appendChild(el('div', { class: 'style-label' }, [f.styleLabel || '个人测算']));
+  wrap.appendChild(el('div', { class: 'date-label' }, [f.birthday ? `${f.birthday} · ${f.gender} · ${f.tzOrientation}方位` : '']));
+
+  // NO_BIRTHDAY 错误态
+  if (f.error === 'NO_BIRTHDAY') {
+    wrap.appendChild(el('div', { class: 'section' }, [
+      el('div', { class: 'section-title' }, ['未设置生日']),
+      el('div', { class: 'section-content' }, ['请先在设置中填写生日，才能进行个人测算。']),
+    ]));
+    return wrap;
+  }
+
+  wrap.appendChild(el('div', { class: 'title' }, [f.modeLabel]));
+  wrap.appendChild(el('div', {}, [stars(f.score)]));
+
+  // 基本信息行
+  const infoRow = el('div', { class: 'profile-tags' }, [
+    el('span', { class: 'tag' }, [`🐲 ${f.shengxiao}`]),
+    el('span', { class: 'tag' }, [`${f.zodiac}`]),
+    el('span', { class: 'tag' }, [`${f.tzWuxing}方位`]),
+  ]);
+  wrap.appendChild(infoRow);
+
+  // mode 专属区块
+  if (f.mode === 'bazi') {
+    wrap.appendChild(el('div', { class: 'section' }, [
+      el('div', { class: 'section-title' }, ['八字简排']),
+      el('div', { class: 'bazi-row' }, [`年柱 ${f.yearGanZhi} · 月支 ${f.monthZhi}`]),
+      el('div', { class: 'bazi-row' }, [
+        '五行分布 ' + Object.entries(f.wuxingDist || {}).map(([k, v]) => `${k}${v}`).join(' '),
+      ]),
+      el('div', { class: 'bazi-row' }, [`主属性 ${f.dominantLabel}`]),
+    ]));
+  } else if (f.mode === 'zodiac') {
+    wrap.appendChild(el('div', { class: 'section' }, [
+      el('div', { class: 'section-title' }, [`${f.zodiac} · 性格`]),
+      el('div', { class: 'section-content' }, [f.zodiacTraits]),
+      el('div', { class: 'section-content', style: 'font-style:italic;color:#5a4a8a;margin-top:6px;' }, [f.zodiacLuck]),
+    ]));
+  } else {
+    wrap.appendChild(el('div', { class: 'section' }, [
+      el('div', { class: 'section-title' }, ['性格标签']),
+      el('div', { class: 'tag-list' }, (f.personalityTags || []).map((t) => el('span', { class: 'tag' }, [t]))),
+    ]));
+    if (f.comprehensiveHint) {
+      wrap.appendChild(el('div', { class: 'section' }, [
+        el('div', { class: 'section-content', style: 'font-style:italic;color:#5a4a8a;' }, [f.comprehensiveHint]),
+      ]));
+    }
+  }
+
+  // 幸运
+  if (f.luckyNum || f.luckyColor) {
+    wrap.appendChild(el('div', { class: 'section' }, [
+      el('div', { class: 'section-title' }, ['今日幸运']),
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' }, [
+        f.luckyNum ? el('div', { class: 'tag' }, [`幸运数字 ${f.luckyNum}`]) : null,
+        f.luckyColor ? el('div', { class: 'color-chip' }, [
+          el('div', { class: 'color-dot', style: `background:${f.luckyColor.hex}` }),
+          document.createTextNode(f.luckyColor.name),
+        ]) : null,
+      ]),
+    ]));
+  }
+
+  return wrap;
+}
+
 // ---------- 调度 ----------
 const RENDERERS = {
   traditional: renderTraditional,
@@ -327,6 +399,7 @@ const RENDERERS = {
   moment: renderMoment,
   tomorrow: renderTomorrow,
   week: renderWeek,
+  profile: renderProfile,
 };
 
 function render(style, fortune) {
@@ -349,14 +422,113 @@ function render(style, fortune) {
     ]));
   }
 
+  // 黄历头部（今日黄历 / 今日个人运势 都含 almanac）
+  if (fortune && fortune.almanac) {
+    content.appendChild(renderAlmanacBar(fortune.almanac));
+  }
+
+  // 精灵加成提示（运势顶部）
+  if (fortune && fortune.boost) {
+    content.appendChild(renderBoostBar(fortune.boost));
+  }
+
   // AI 解读占位（异步追加）
   content.appendChild(el('div', { class: 'ai-interpretation', id: 'ai-block', style: 'display:none;' }));
 
   // 操作栏
   const actions = el('div', { class: 'actions' }, [
+    style === 'profile'
+      ? el('button', { class: 'action-btn primary', onclick: handleProfileDecode }, ['🔮 解算'])
+      : null,
     el('button', { class: 'action-btn', onclick: handleClose }, ['关闭']),
   ]);
   content.appendChild(actions);
+}
+
+// 今日黄历头部
+function renderAlmanacBar(al) {
+  const wrap = el('div', { class: 'almanac-bar' });
+  // 干支年 + 生肖
+  wrap.appendChild(el('div', { class: 'almanac-head' }, [
+    el('span', { class: 'almanac-ganzhi' }, [al.yearGanzhi]),
+    document.createTextNode(' '),
+    el('span', { class: 'almanac-shengxiao' }, [`🐲 ${al.shengxiao}年`]),
+  ]));
+  // 宜
+  if (al.yi && al.yi.length) {
+    wrap.appendChild(el('div', { class: 'almanac-row' }, [
+      el('span', { class: 'almanac-yi' }, ['宜']),
+      document.createTextNode(' ' + al.yi.join(' · ')),
+    ]));
+  }
+  // 忌
+  if (al.ji && al.ji.length) {
+    wrap.appendChild(el('div', { class: 'almanac-row' }, [
+      el('span', { class: 'almanac-ji' }, ['忌']),
+      document.createTextNode(' ' + al.ji.join(' · ')),
+    ]));
+  }
+  // 幸运
+  if (al.luckyColor || al.luckyNum) {
+    const luckRow = el('div', { class: 'almanac-row almanac-luck' });
+    if (al.luckyNum) luckRow.appendChild(el('span', {}, [`幸运数字 ${al.luckyNum}`]));
+    if (al.luckyColor) {
+      luckRow.appendChild(el('span', { class: 'color-chip', style: 'margin-left:8px;' }, [
+        el('span', { class: 'color-dot', style: `background:${al.luckyColor.hex}` }),
+        document.createTextNode(al.luckyColor.name),
+      ]));
+    }
+    wrap.appendChild(luckRow);
+  }
+  return wrap;
+}
+
+// 运势精灵加持提示条（五项维度）
+function renderBoostBar(boost) {
+  const applied = boost.applied || [];
+  const items = [];
+  // 各项维度加持
+  const icons = { 综合: '⭐', 爱情: '❤️', 事业: '💼', 财运: '💰', 健康: '🌿' };
+  for (const a of applied) {
+    // a 形如 "财运+1"
+    const dim = a.replace(/\+.+$/, '');
+    items.push({ icon: icons[dim] || '✨', text: `${dim}加持 ${a.replace(/^.+(\+\d+)$/, '$1')}`, cls: 'boost-good' });
+  }
+  if (applied.length === 0) {
+    items.push({ icon: '🔮', text: '运势精灵：暂无加持（祈福或移动球到方位可提升）', cls: 'boost-info' });
+  } else if (boost.posWuxing) {
+    const names = { water: '文昌位', wood: '事业位', metal: '财位', fire: '桃花位', earth: '健康位' };
+    items.push({ icon: '📌', text: `球在${names[boost.posWuxing] || boost.posWuxing}，持续积累中`, cls: 'boost-info' });
+  }
+  const wrap = el('div', { class: 'boost-bar' });
+  for (const it of items) {
+    wrap.appendChild(el('div', { class: 'boost-item ' + it.cls }, [
+      el('span', {}, [it.icon]),
+      document.createTextNode(' ' + it.text),
+    ]));
+  }
+  return wrap;
+}
+
+// 个人测算"解算"：对当前档案做一次深度 AI 解读
+async function handleProfileDecode() {
+  window.logger.info('card.profileDecode', 'start');
+  try {
+    const result = await window.api.aiInterpretAsk({ profile: true });
+    if (result.ok && result.text) {
+      window.logger.info('card.profileDecode', 'done');
+      appendAiInterpretation(result.text, null);
+    } else if (result.error === 'NO_BIRTHDAY') {
+      window.logger.warn('card.profileDecode', 'NO_BIRTHDAY');
+      appendAiInterpretation('请先在设置中填写生日，才能解算。', null);
+    } else {
+      window.logger.warn('card.profileDecode', `failed: ${result.error}`);
+      appendAiInterpretation(`解算失败：${result.error || '未知错误'}`, null);
+    }
+  } catch (e) {
+    window.logger.error('card.profileDecode', e.message);
+    appendAiInterpretation(`解算失败：${e.message}`, null);
+  }
 }
 
 // AI 提问卡片（用户右键球提问的场景）

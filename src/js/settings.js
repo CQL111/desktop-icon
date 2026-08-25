@@ -112,9 +112,63 @@ $('pull').addEventListener('click', async () => {
   }
 });
 
+// ---------- 个人信息 ----------
+async function loadProfile() {
+  try {
+    const [profile, mode] = await Promise.all([
+      window.api.getProfile(),
+      window.api.getProfileMode(),
+    ]);
+    $('birthday').value = (profile && profile.birthday) || '';
+    $('gender').value = (profile && profile.gender) || '';
+    $('profile-mode').value = mode || 'comprehensive';
+  } catch (e) {
+    window.logger.warn('settings.profile', `load failed: ${e.message}`);
+  }
+}
+
+$('profile-save').addEventListener('click', async () => {
+  const birthday = $('birthday').value;
+  const gender = $('gender').value;
+  const mode = $('profile-mode').value;
+  window.logger.info('settings.profile', `save birthday=${birthday} gender=${gender} mode=${mode}`);
+  try {
+    await window.api.saveProfile({ birthday, gender });
+    await window.api.setProfileMode(mode);
+    const st = $('profile-status');
+    st.className = 'status ok';
+    st.textContent = '✅ 已保存';
+  } catch (e) {
+    $('profile-status').className = 'status err';
+    $('profile-status').textContent = '保存失败：' + (e.message || e);
+  }
+});
+
+// 查看测算：直接弹卡片
+$('profile-view').addEventListener('click', async () => {
+  const birthday = $('birthday').value;
+  if (!birthday) {
+    $('profile-status').className = 'status err';
+    $('profile-status').textContent = '请先填写生日';
+    return;
+  }
+  // 先保存当前表单，再让球触发 profile scope
+  try {
+    await window.api.saveProfile({ birthday, gender: $('gender').value });
+    await window.api.setProfileMode($('profile-mode').value);
+  } catch {}
+  // 通过 draw-fortune scope=profile 直接弹卡片
+  const result = await window.api.drawFortune({ scope: 'profile' });
+  if (result && result.fortune && result.fortune.error === 'NO_BIRTHDAY') {
+    $('profile-status').className = 'status err';
+    $('profile-status').textContent = '请先填写生日';
+  }
+});
+
 // 启动
 (async () => {
   window.logger.info('settings.load', 'start');
   await refreshLlmStatus();
   await refreshLocalModels();
+  await loadProfile();
 })();

@@ -103,7 +103,7 @@ assert(persHot.tagline, 'personalized hot 有 tagline');
 // 此刻 (moment)
 const momentF = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申' });
 assert(momentF.style === 'moment', 'moment style 正确');
-assert(momentF.styleLabel === '此刻运势', 'moment styleLabel 正确');
+assert(momentF.styleLabel === '此刻个人运势', 'moment styleLabel 正确');
 assert(momentF.hour === '申', 'moment hour 正确');
 assert(typeof momentF.luckyWord === 'string' && momentF.luckyWord.length > 0, 'moment luckyWord 存在');
 assert(typeof momentF.guidance === 'string' && momentF.guidance.length > 0, 'moment guidance 存在');
@@ -141,6 +141,99 @@ assert(typeof fortune.getCurrentHourKey() === 'string', 'getCurrentHourKey 返�
 assert(typeof fortune.getIsoWeek(new Date()) === 'string', 'getIsoWeek 返回字符串');
 const hourInfo = fortune.getHourInfo('申');
 assert(hourInfo && hourInfo.name === '申时', 'getHourInfo 申时正确');
+
+// ===== 第六阶段：个人测算 =====
+const persona = require('./src/js/data/persona');
+assert(persona.getShengxiao(1995) === '猪', 'persona 1995=猪');
+assert(persona.getShengxiao(2008) === '鼠', 'persona 2008=鼠');
+assert(persona.getYearGanzhi(1984) === '甲子', 'persona 1984=甲子');
+assert(persona.getMonthZhi(7) === '未', 'persona 7月=未');
+const tzInfo = persona.getTimeZoneOrientation();
+assert(tzInfo && tzInfo.orientation, 'persona 时区方位存在');
+
+const profile = { birthday: '1995-07-20', gender: 'female' };
+const profComp = fortune.genProfile({ dateKey: todayKey, profile, profileMode: 'comprehensive' });
+assert(profComp.style === 'profile', 'profile comprehensive style');
+assert(profComp.mode === 'comprehensive', 'profile comprehensive mode');
+assert(profComp.shengxiao === '猪', 'profile 生肖');
+assert(profComp.zodiac === '巨蟹座', 'profile 星座 1995-07-20=巨蟹');
+assert(Array.isArray(profComp.personalityTags) && profComp.personalityTags.length > 0, 'profile 性格标签');
+assert(profComp.luckyColor && profComp.luckyColor.hex, 'profile 幸运色');
+
+const profBazi = fortune.genProfile({ dateKey: todayKey, profile, profileMode: 'bazi' });
+assert(profBazi.mode === 'bazi', 'profile bazi mode');
+assert(profBazi.yearGanZhi === '乙亥', 'profile 年柱 1995=乙亥');
+assert(profBazi.monthZhi === '未', 'profile 月支 7月=未');
+assert(profBazi.wuxingDist && Object.keys(profBazi.wuxingDist).length === 5, 'profile 五行分布 5 行');
+assert(profBazi.dominantLabel, 'profile 主属性');
+
+const profZodiac = fortune.genProfile({ dateKey: todayKey, profile, profileMode: 'zodiac' });
+assert(profZodiac.mode === 'zodiac', 'profile zodiac mode');
+assert(profZodiac.zodiacTraits && profZodiac.zodiacTraits.length > 0, 'profile 星座性格');
+
+// NO_BIRTHDAY
+let threw = false;
+try { fortune.genProfile({ dateKey: todayKey, profile: {}, profileMode: 'comprehensive' }); }
+catch (e) { threw = e.message === 'NO_BIRTHDAY'; }
+assert(threw, 'profile 无生日抛 NO_BIRTHDAY');
+
+// ===== 第六阶段：今日黄历 =====
+const almanac = fortune.genAlmanac({ dateKey: '2026-08-24' });
+assert(almanac.style === 'almanac', 'almanac style');
+assert(almanac.styleLabel === '今日黄历', 'almanac 标题');
+assert(almanac.yearGanzhi === '丙午', 'almanac 2026=丙午');
+assert(almanac.shengxiao === '马', 'almanac 2026=马');
+assert(Array.isArray(almanac.yi) && almanac.yi.length === 3, 'almanac 宜 3 条');
+assert(Array.isArray(almanac.ji) && almanac.ji.length === 3, 'almanac 忌 3 条');
+assert(almanac.luckyColor && almanac.luckyColor.hex, 'almanac 幸运色');
+assert(almanac.luckyNum >= 1 && almanac.luckyNum <= 9, 'almanac 幸运数字 1-9');
+
+// profile 融合黄历
+const profWithAlmanac = fortune.genProfile({ dateKey: todayKey, profile, profileMode: 'comprehensive' });
+assert(profWithAlmanac.styleLabel === '今日个人运势', 'profile 标题改为今日个人运势');
+assert(profWithAlmanac.almanac && profWithAlmanac.almanac.yearGanzhi, 'profile 含黄历数据');
+
+// moment 融合个人
+const momentWithProfile = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申', profile });
+assert(momentWithProfile.styleLabel === '此刻个人运势', 'moment 标题改为此刻个人运势');
+assert(momentWithProfile.personal && momentWithProfile.personal.shengxiao === '猪', 'moment 含个人生肖');
+
+// ===== 第七阶段：运势精灵 =====
+const spirit = require('./src/js/fortuneSpirit');
+let sp = spirit.defaultSpirit();
+assert(sp.boosts.综合 === 0 && sp.boosts.财运 === 0, 'spirit 初始加持全 0');
+assert(spirit.DIMENSIONS.length === 5, 'spirit 五项维度');
+
+// 摆位积累
+sp = spirit.applyPosition(sp, 'metal', Date.now());  // 进入财位
+assert(sp.positionWuxing === 'metal', 'spirit 摆位记录方位');
+sp.positionSince = Date.now() - 6 * 60 * 1000;       // 模拟停留6分钟
+sp = spirit.applyPosition(sp, 'metal', Date.now());
+assert(sp.boosts.财运 === 1, 'spirit 摆位6分钟财运+1');
+
+// 祈福
+let br = spirit.bless(sp, '财运', '2026-08-24', Date.now());
+assert(br.ok !== false && br.boost === 2, 'spirit 祈福财运+1（累计2）');
+assert(br.remaining === 2, 'spirit 祈福后剩余2次');
+
+// 每日限次
+let sp2 = spirit.defaultSpirit();
+sp2 = spirit.bless(sp2, '综合', '2026-08-24', Date.now()).spirit;
+sp2 = spirit.bless(sp2, '爱情', '2026-08-24', Date.now()).spirit;
+sp2 = spirit.bless(sp2, '事业', '2026-08-24', Date.now()).spirit;
+const limitRes = spirit.bless(sp2, '财运', '2026-08-24', Date.now());
+assert(limitRes.error === 'DAILY_LIMIT', 'spirit 第4次祈福触发限次');
+
+// 上限
+let sp3 = spirit.defaultSpirit();
+sp3.boosts.财运 = 3;
+const maxRes = spirit.bless(sp3, '财运', '2026-08-24', Date.now());
+assert(maxRes.error === 'MAXED', 'spirit 财运满3不能再祈福');
+
+// 五行→维度映射
+assert(spirit.WUXING_TO_DIM.metal === '财运', 'spirit 金→财运');
+assert(spirit.WUXING_TO_DIM.wood === '事业', 'spirit 木→事业');
+assert(spirit.DIM_FIELDS.爱情.includes('感情'), 'spirit 爱情映射含感情字段');
 
 // ===== 第五阶段：detector 模式匹配 + 行为打分日志 =====
 const detector = require('./src/js/detector');

@@ -479,3 +479,65 @@ html, body {
 .week-day-date   { color: #6a7a8a; font-family: 'Cascadia Code', Consolas, monospace; }
 .week-day-stars  { color: #d4af37; letter-spacing: 1px; }
 .week-day-hint   { color: #4a5a6a; font-size: 11px; }
+
+/* ---------- 个人测算 (profile) ---------- */
+.card-bg-profile {
+  background: linear-gradient(135deg, rgba(220, 220, 255, 0.18), rgba(255, 220, 240, 0.18));
+  border-radius: 12px;
+  padding: 4px;
+}
+.profile-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 10px 0 14px 0;
+}
+.profile-tags .tag {
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #5a4a7a;
+}
+.bazi-row {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #4a3a6a;
+  font-family: 'STKaiti', 'KaiTi', serif;
+}
+.bazi-row:first-child { font-size: 15px; font-weight: 600; }
+
+/* 今日黄历头部 */
+.almanac-bar {
+  margin: 8px 0 4px 0;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(255, 240, 220, 0.5), rgba(255, 220, 200, 0.4));
+  border: 1px solid rgba(210, 160, 90, 0.25);
+  border-radius: 10px;
+}
+.almanac-head { font-size: 15px; font-weight: 600; color: #8a5a2a; margin-bottom: 6px; }
+.almanac-ganzhi { font-family: 'STKaiti', 'KaiTi', serif; font-size: 17px; }
+.almanac-shengxiao { color: #a06a2a; }
+.almanac-row { font-size: 12px; line-height: 1.7; color: #6a4a2a; }
+.almanac-yi { color: #3a8a4a; font-weight: 600; }
+.almanac-ji { color: #b04a3a; font-weight: 600; }
+.almanac-luck { display: flex; align-items: center; margin-top: 2px; }
+
+/* 精灵加成提示条 */
+.boost-bar {
+  margin: 8px 0 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.boost-item {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.boost-good { background: rgba(108, 212, 154, 0.12); color: #3a7a52; }
+.boost-bad  { background: rgba(255, 138, 138, 0.12); color: #a04a4a; }
+.boost-info { background: rgba(125, 200, 255, 0.12); color: #3a6a8a; }

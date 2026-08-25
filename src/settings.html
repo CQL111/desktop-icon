@@ -42,6 +42,40 @@
     </section>
 
     <section class="section">
+      <h2>个人信息</h2>
+      <p class="hint">用于个人测算（球上 👤 签）。生日必填，性别可选，地理位置自动按系统时区。</p>
+
+      <label>
+        <span>生日</span>
+        <input id="birthday" type="date">
+      </label>
+
+      <label>
+        <span>性别</span>
+        <select id="gender">
+          <option value="">保密</option>
+          <option value="male">男</option>
+          <option value="female">女</option>
+        </select>
+      </label>
+
+      <label>
+        <span>测算形态</span>
+        <select id="profile-mode">
+          <option value="comprehensive">综合命理档案</option>
+          <option value="bazi">八字排盘</option>
+          <option value="zodiac">星座性格</option>
+        </select>
+      </label>
+
+      <div class="row">
+        <button id="profile-save" class="btn primary">保存</button>
+        <button id="profile-view" class="btn">查看测算</button>
+      </div>
+      <div id="profile-status" class="status"></div>
+    </section>
+
+    <section class="section">
       <h2>关于</h2>
       <p class="hint">桌面悬浮球 · 今日运势 · v1.0</p>
     </section>
