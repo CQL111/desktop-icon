@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
+  <title>运势精灵</title>
+  <link rel="stylesheet" href="styles/petPanel.css">
+</head>
+<body>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="spirit-face">🔮</div>
+      <div class="spirit-meta">
+        <div class="spirit-name">运势精灵</div>
+        <div class="spirit-sub">通过摆位 + 祈福提升运势</div>
+      </div>
+      <button class="close-btn" id="close" title="关闭">×</button>
+    </div>
+
+    <!-- 当前方位提示 -->
+    <div class="pos-hint" id="pos-hint">正在检测方位…</div>
+
+    <!-- 五项加持 -->
+    <div class="dims" id="dims"></div>
+
+    <!-- 祈福区 -->
+    <div class="section">
+      <div class="section-title">祈福（今日剩余 <span id="bless-remaining">3</span> 次）</div>
+      <div class="bless-row" id="bless-row"></div>
+      <div class="bless-msg" id="bless-msg"></div>
+    </div>
+
+    <!-- AI 提问 -->
+    <div class="section">
+      <button class="ai-btn" id="btn-ai">✨ AI 运势解读</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+  <script src="js/rendererLogger.js"></script>
+  <script src="js/petPanel.js"></script>
+</body>
+</html>

@@ -125,7 +125,7 @@ ball.addEventListener('pointercancel', () => {
   ball.classList.add('idle');
 });
 
-// ---------- 右键 → AI 浮窗 ----------
+// ---------- 右键 → AI 运势对话 ----------
 ball.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   if (isDrawing) return;
@@ -149,7 +149,12 @@ signChips.forEach((chip) => {
 
 async function handlePickSign(scope) {
   if (isDrawing) return;
-  // 球本身 + chips 共用同一套抽签动画，scope 不同决定运势内容
+  // spirit 签：直接开精灵祈福面板，不抽签
+  if (scope === 'spirit') {
+    window.logger.info('ball.pickSign', 'spirit → open panel');
+    window.api.openPetPanel();
+    return;
+  }
   await runDrawFlow({ scope });
 }
 
@@ -177,22 +182,16 @@ async function runDrawFlow({ scope }) {
   window.logger.info('ball.draw', `started scope=${scope}`);
 
   try {
-    // 1. 先在主进程生成运势（不显示卡片，等动画结束再显示）
+    // 1. 先在主进程生成运势（不显示卡片，等数据就绪再显示）
     const result = await window.api.drawFortune({ deferCard: true, scope });
     if (!result) return;
 
-    // 2. 弹跳动画（纯 CSS transform，零 IPC）
-    const finalPos = await playBounceAnimation();
-
-    // 3. 中心爆炸效果
-    await playExplodeEffect();
-
-    // 4. 应用运势（表情 + 颜色）
-    //    注意：moment / tomorrow / week 都有 luckyColor，但 mood 处理依赖 score
+    // 2. 应用运势（表情 + 颜色）
     applyFortune(result.fortune);
 
-    // 5. 显示卡片，传球的屏幕坐标
-    await window.api.showFortuneCard(result.style, result.score, result.fortune, finalPos.x, finalPos.y);
+    // 3. 直接显示卡片（无弹跳/爆炸动画）
+    const cur = getCurrentPos();
+    await window.api.showFortuneCard(result.style, result.score, result.fortune, cur.x, cur.y);
     cardOpenTime = Date.now();
     window.logger.info('ball.draw', `done scope=${scope} style=${result.style} score=${result.score}`);
   } catch (e) {
@@ -318,9 +317,13 @@ function playExplodeEffect() {
   });
 }
 
-// ---------- 监听全局快捷键 ----------
-window.api.onShortcutDraw(() => {
-  handleClick();
+// ---------- 监听全局快捷键 / 托盘黄历测算 ----------
+window.api.onShortcutDraw((scope) => {
+  if (scope) {
+    runDrawFlow({ scope });
+  } else {
+    handleClick();
+  }
 });
 
 // OS 层点击穿透：见 setBallTransform 上方的 mouse tracking 区块。
@@ -351,6 +354,20 @@ ball.classList.add('idle');
   } catch (e) {
     console.warn('读取位置失败:', e);
     window.logger.warn('ball.init', `load failed: ${e.message}`);
+  }
+
+  // 2. 运势精灵方位提示（移到财位等方位可积累加持）
+  try {
+    const data = await window.api.getSpirit();
+    const bubble = document.getElementById('pet-bubble');
+    if (bubble && data.posDim) {
+      const names = { 综合: '文昌位', 事业: '事业位', 财运: '财位', 爱情: '桃花位', 健康: '健康位' };
+      bubble.textContent = `📍 当前在${names[data.posDim] || data.posDim}`;
+      bubble.classList.add('show');
+      setTimeout(() => bubble.classList.remove('show'), 4000);
+    }
+  } catch (e) {
+    window.logger.warn('ball.init', `spirit status failed: ${e.message}`);
   }
 
   // 不再启动时自动应用今日运势——

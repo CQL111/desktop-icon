@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('card-data', listener);
   },
   onShortcutDraw: (handler) => {
-    const listener = () => handler();
+    const listener = (_e, scope) => handler(scope);
     ipcRenderer.on('shortcut-draw', listener);
     return () => ipcRenderer.removeListener('shortcut-draw', listener);
   },
@@ -51,6 +51,17 @@ contextBridge.exposeInMainWorld('api', {
   getLocalModels: () => ipcRenderer.invoke('get-local-models'),
   setLocalModel: (name) => ipcRenderer.invoke('set-local-model', name),
   pullLocalModel: (name) => ipcRenderer.invoke('pull-local-model', name),
+
+  // ---------- 个人测算 ----------
+  saveProfile: (profile) => ipcRenderer.invoke('save-profile', profile),
+  getProfile: () => ipcRenderer.invoke('get-profile'),
+  setProfileMode: (mode) => ipcRenderer.invoke('set-profile-mode', mode),
+  getProfileMode: () => ipcRenderer.invoke('get-profile-mode'),
+
+  // ---------- 运势精灵 ----------
+  openPetPanel: () => ipcRenderer.invoke('open-pet-panel'),
+  getSpirit: () => ipcRenderer.invoke('get-spirit'),
+  blessSpirit: (dim) => ipcRenderer.invoke('bless-spirit', dim),
 
   // ---------- AI 输入浮窗 ----------
   openAiInput: () => ipcRenderer.invoke('open-ai-input'),

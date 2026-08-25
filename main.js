@@ -11,6 +11,7 @@ const LogWatcher = require('./src/js/watcher');
 const selfCheck = require('./src/js/selfCheck');
 const localLLM = require('./src/js/localLLM');
 const onlineConfig = require('./src/js/onlineConfig');
+const spirit = require('./src/js/fortuneSpirit');
 
 // Windows 通知必须先设 appId（在 ready 之前）
 app.setAppUserModelId('com.fortune.ball');
@@ -34,6 +35,10 @@ const store = new Store({
     manualSwitchCount: 0,  // 用户主动"换一换"计数（每 5 次临时降权被切走的风格）
     aiConfig: { baseUrl: '', encryptedToken: null, tokenObfuscated: null, model: '' },
     localModel: '',         // 用户选择的本地模型名（空 = 用线上）
+    profile: { birthday: null, gender: '' },  // 个人测算基础信息
+    profileMode: 'comprehensive',              // comprehensive | bazi | zodiac
+    profileCache: {},                          // { 'profile|YYYY-MM-DD|mode': { score, data, ts } }
+    fortuneSpirit: null,                       // 运势精灵（null = 首次用 defaultSpirit）
     aiCache: {},           // { 'yyyy-mm-dd': { style: { text, usage, ts } } }
     aiAskCache: {},        // { hash: { text, ts } }
     momentCache: {},       // { 'moment|yyyy-mm-dd|hhKey': { score, data, ts } }
@@ -178,6 +183,51 @@ function getBallScreenPos() {
   };
 }
 
+// ---------- 运势精灵 ----------
+function getSpirit() {
+  return store.get('fortuneSpirit') || spirit.defaultSpirit();
+}
+function saveSpirit(s) {
+  store.set('fortuneSpirit', s);
+  return s;
+}
+
+// 计算当前球位置对应的五行方位（复用五方分区逻辑，本地实现）
+function getCurrentPosWuxing() {
+  const pos = getBallScreenPos();
+  const work = screen.getPrimaryDisplay().workArea;
+  const cx = (work.x || 0) + (work.width || 0) / 2;
+  const cy = (work.y || 0) + (work.height || 0) / 2;
+  const left = pos.x < cx, top = pos.y < cy;
+  if (left && top) return 'water';
+  if (!left && top) return 'wood';
+  if (left && !top) return 'metal';
+  return 'fire';
+}
+
+// 摆位定时器：每 60 秒检查球方位，停留满 5 分钟自动积累对应维度
+let spiritTimer = null;
+function startSpiritAccum() {
+  if (spiritTimer) return;
+  spiritTimer = setInterval(() => {
+    try {
+      if (!ballWindow || ballWindow.isDestroyed()) return;
+      const wuxing = getCurrentPosWuxing();
+      const s = getSpirit();
+      const before = s.boosts[wuxing ? spirit.WUXING_TO_DIM[wuxing] : ''] || 0;
+      const updated = spirit.applyPosition(s, wuxing, Date.now());
+      const dim = spirit.WUXING_TO_DIM[wuxing];
+      const after = dim ? (updated.boosts[dim] || 0) : 0;
+      if (after > before) {
+        logger.info('spirit.accum', `摆位积累：${dim} +1（${wuxing}方位）`, { dim, wuxing });
+      }
+      saveSpirit(updated);
+    } catch (e) {
+      logger.warn('spirit.accum', `failed: ${e.message}`);
+    }
+  }, 60000);
+}
+
 // 根据球的屏幕坐标计算卡片的目标位置（不直接应用）
 function computeCardPosition(ballScreenX, ballScreenY) {
   const work = screen.getPrimaryDisplay().workArea;
@@ -302,9 +352,9 @@ function _createSettingsWindowImpl() {
   }
   settingsWindow = new BrowserWindow({
     width: 460,
-    height: 480,
+    height: 600,
     minWidth: 400,
-    minHeight: 360,
+    minHeight: 480,
     transparent: false,
     frame: true,
     title: '设置',
@@ -395,6 +445,69 @@ function positionAiInputNearBall() {
   aiInputWindow.setPosition(Math.round(x), Math.round(y));
 }
 
+// ---------- 精灵面板 ----------
+let petPanelWindow = null;
+function createPetPanelWindow() {
+  try {
+    return _createPetPanelWindowImpl();
+  } catch (e) {
+    logger.error('main.window', `createPetPanelWindow failed: ${e.message}`);
+    throw e;
+  }
+}
+function _createPetPanelWindowImpl() {
+  if (petPanelWindow && !petPanelWindow.isDestroyed()) {
+    petPanelWindow.show();
+    petPanelWindow.focus();
+    return petPanelWindow;
+  }
+  petPanelWindow = new BrowserWindow({
+    width: 340,
+    height: 460,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    backgroundColor: '#00000000',
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+  if (typeof petPanelWindow.setExcludedFromAltTab === 'function') {
+    petPanelWindow.setExcludedFromAltTab(true);
+  }
+  petPanelWindow.setMenuBarVisibility(false);
+  petPanelWindow.loadFile(path.join(__dirname, 'src', 'petPanel.html'));
+  petPanelWindow.on('blur', () => {
+    if (petPanelWindow && !petPanelWindow.isDestroyed()) petPanelWindow.hide();
+  });
+  petPanelWindow.on('closed', () => { petPanelWindow = null; });
+  return petPanelWindow;
+}
+
+// 精灵面板定位：贴在球旁边
+function positionPetPanelNearBall() {
+  if (!petPanelWindow || petPanelWindow.isDestroyed()) return;
+  const pos = getBallScreenPos();
+  const work = screen.getPrimaryDisplay().workArea;
+  const w = 340, h = 460;
+  let x = pos.x + BALL_SIZE + 8;
+  if (x + w > work.x + work.width) x = pos.x - w - 8;
+  if (x < work.x) x = work.x + 8;
+  let y = pos.y;
+  if (y + h > work.y + work.height) y = work.y + work.height - h - 8;
+  if (y < work.y) y = work.y + 8;
+  petPanelWindow.setPosition(Math.round(x), Math.round(y));
+}
+
 // ---------- 托盘 ----------
 function createTray() {
   // 占位图标：1x1 透明（用户后续可替换为真实 ICO）
@@ -418,6 +531,14 @@ function createTray() {
 
   tray.setToolTip('今日运势');
   rebuildTrayMenu();
+}
+
+// 托盘菜单触发抽签（复用球的 draw-fortune 流程）
+function triggerDraw(scope) {
+  if (!ballWindow || ballWindow.isDestroyed()) createBallWindow();
+  ballWindow.show();
+  ballWindow.focus();
+  ballWindow.webContents.send('shortcut-draw', scope);
 }
 
 function rebuildTrayMenu() {
@@ -472,6 +593,14 @@ function rebuildTrayMenu() {
       },
     },
     { type: 'separator' },
+    {
+      label: '黄历测算',
+      submenu: [
+        { label: '今日黄历', click: () => triggerDraw('today') },
+        { label: '明日黄历', click: () => triggerDraw('tomorrow') },
+        { label: '本周黄历', click: () => triggerDraw('week') },
+      ],
+    },
     {
       label: '设置...',
       click: () => {
@@ -658,12 +787,51 @@ function registerIpc() {
     const { deferCard = false, scope = 'today' } = options;
     const todayKey = fortune.getTodayKey();
     const cached = store.get('todayFortune') || {};
+    // 应用运势精灵加持（五项维度加分）
+    const applyBoost = (data) => {
+      try {
+        const s = getSpirit();
+        const boosts = s.boosts || {};
+        const applied = [];
+        // 逐维度加分到 dims
+        for (const dim of spirit.DIMENSIONS) {
+          const b = boosts[dim] || 0;
+          if (b <= 0) continue;
+          const fields = spirit.DIM_FIELDS[dim] || [];
+          for (const field of fields) {
+            if (field === 'score') continue; // 综合单独处理
+            if (data.dims && typeof data.dims[field] === 'number') {
+              const max = field === '感情' || field === '爱情' ? 5 : (data.dims[field] > 100 ? 100 : 5);
+              const cap = field === '事业' || field === '财运' || field === '健康' || field === '感情' ? (data.dims[field] > 100 ? 100 : 5) : 5;
+              data.dims[field] = Math.min(cap, data.dims[field] + b);
+            }
+          }
+          applied.push(`${dim}+${b}`);
+        }
+        // 综合加持 → 总分
+        const totalBoost = boosts['综合'] || 0;
+        if (totalBoost > 0 && typeof data.score === 'number') {
+          data.score = Math.min(5, data.score + totalBoost);
+        }
+        data.boost = {
+          applied,              // ['财运+1','事业+1']
+          boosts,               // 完整加持表
+          posWuxing: getCurrentPosWuxing(),
+        };
+      } catch (e) {
+        logger.warn('spirit.boost', `apply failed: ${e.message}`);
+      }
+      return data;
+    };
+
     const showCard = (style, score, data) => {
+      applyBoost(data);
       if (deferCard) return;
-      const win = createCardWindow(lastBallScreenPos.x, lastBallScreenPos.y);
+      const pos = getBallScreenPos();
+      const win = createCardWindow(pos.x, pos.y);
       win._stayOpen = true;
       cardCurrentStyle = style;
-      queueCardData({ style, score, fortune: data });
+      queueCardData({ style, score: data.score, fortune: data });
       win.show();
       win.focus();
       setTimeout(() => { if (win && !win.isDestroyed()) win._stayOpen = false; }, 500);
@@ -683,7 +851,7 @@ function registerIpc() {
         showCard('moment', entry.score, entry.data);
         return { style: 'moment', score: entry.score, fortune: entry.data, cached: true };
       }
-      const data = fortune.genHourFortune({ dateKey: todayKey, hourKey });
+      const data = fortune.genHourFortune({ dateKey: todayKey, hourKey, profile: store.get('profile') });
       momentCache[cacheKey] = { score: data.score, data, ts: Date.now() };
       // 清理 7 天前的
       const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
@@ -740,6 +908,34 @@ function registerIpc() {
       return { style: 'week', score: data.score, fortune: data, cached: false };
     }
 
+    // ===== scope=profile: 个人测算 =====
+    if (scope === 'profile') {
+      const profile = store.get('profile') || {};
+      const profileMode = store.get('profileMode') || 'comprehensive';
+      logger.info('main.drawFortune', `scope=profile mode=${profileMode} hasBirthday=${!!profile.birthday}`);
+      if (!profile.birthday) {
+        // 未填生日 → 返回引导（前端渲染错误态）
+        return { style: 'profile', score: 0, fortune: { error: 'NO_BIRTHDAY' }, cached: false };
+      }
+      const cacheKey = `profile|${profile.birthday}|${profileMode}`;
+      const profileCache = store.get('profileCache') || {};
+      if (profileCache[cacheKey]) {
+        const entry = profileCache[cacheKey];
+        logger.info('main.drawFortune', 'scope=profile cached');
+        showCard('profile', entry.score, entry.data);
+        return { style: 'profile', score: entry.score, fortune: entry.data, cached: true };
+      }
+      const data = fortune.genProfile({ dateKey: todayKey, profile, profileMode });
+      profileCache[cacheKey] = { score: data.score, data, ts: Date.now() };
+      const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+      for (const k of Object.keys(profileCache)) {
+        if (profileCache[k].ts < cutoff) delete profileCache[k];
+      }
+      store.set('profileCache', profileCache);
+      showCard('profile', data.score, data);
+      return { style: 'profile', score: data.score, fortune: data, cached: false };
+    }
+
     // ===== scope=today（默认）: 沿用第一/二阶段逻辑 =====
     // 当日已有缓存 → 直接返回 + 记录行为
     if (cached[todayKey]) {
@@ -772,6 +968,9 @@ function registerIpc() {
       totalClicks,
       topStyles: ranked,
     });
+    // 叠加今日黄历 + 改标题
+    data.almanac = fortune.genAlmanac({ dateKey: todayKey });
+    data.styleLabel = '今日黄历';
     // 缓存
     cached[todayKey] = { style, score: data.score, data };
     // 只保留最近 7 天的缓存，避免 store 膨胀
@@ -848,6 +1047,64 @@ function registerIpc() {
     return result;
   });
 
+  // ---------- 个人测算 ----------
+  handle('save-profile', (_e, profile = {}) => {
+    const next = {
+      birthday: typeof profile.birthday === 'string' ? profile.birthday : null,
+      gender: ['male', 'female', ''].includes(profile.gender) ? profile.gender : '',
+    };
+    store.set('profile', next);
+    // 同时推导写入顶层 zodiac（兼容现有 tarot / AI 读取）
+    if (next.birthday) {
+      try {
+        const [y, m, d] = next.birthday.split('-').map(Number);
+        const zodiac = require('./src/js/data/tarot').getZodiac(m, d);
+        store.set('zodiac', zodiac.key);
+        logger.info('profile', `saved birthday=${next.birthday} gender=${next.gender} zodiac=${zodiac.key}`);
+      } catch (e) {
+        logger.warn('profile', `derive zodiac failed: ${e.message}`);
+      }
+    }
+    return true;
+  });
+
+  handle('get-profile', () => store.get('profile') || { birthday: null, gender: '' });
+
+  handle('set-profile-mode', (_e, mode) => {
+    const v = ['comprehensive', 'bazi', 'zodiac'].includes(mode) ? mode : 'comprehensive';
+    store.set('profileMode', v);
+    logger.info('profile', `mode set to ${v}`);
+    return true;
+  });
+
+  handle('get-profile-mode', () => store.get('profileMode') || 'comprehensive');
+
+  // ---------- 运势精灵 ----------
+  // 获取当前加持状态
+  handle('get-spirit', () => {
+    const s = getSpirit();
+    const posWuxing = getCurrentPosWuxing();
+    return {
+      boosts: s.boosts,
+      blessRemaining: spirit.BLESS_DAILY_LIMIT - (s.lastBlessDate === fortune.getTodayKey() ? s.blessCountToday : 0),
+      posWuxing,
+      posDim: spirit.WUXING_TO_DIM[posWuxing] || null,
+    };
+  });
+
+  // 祈福：指定维度加持 +1
+  handle('bless-spirit', (_e, dim) => {
+    let s = getSpirit();
+    const result = spirit.bless(s, dim, fortune.getTodayKey(), Date.now());
+    saveSpirit(result.spirit);
+    if (result.error) {
+      logger.warn('spirit.bless', `dim=${dim} error=${result.error}`);
+      return { ok: false, error: result.error };
+    }
+    logger.info('spirit.bless', `dim=${dim} +1 → ${result.boost}`, { remaining: result.remaining });
+    return { ok: true, dim, boost: result.boost, remaining: result.remaining, boosts: result.spirit.boosts };
+  });
+
   handle('open-settings', () => {
     createSettingsWindow();
     return true;
@@ -869,6 +1126,15 @@ function registerIpc() {
     return true;
   });
 
+  // 打开精灵面板
+  handle('open-pet-panel', () => {
+    const win = createPetPanelWindow();
+    positionPetPanelNearBall();
+    win.show();
+    win.focus();
+    return true;
+  });
+
   handle('close-ai-input', () => {
     if (aiInputWindow && !aiInputWindow.isDestroyed()) aiInputWindow.hide();
     return true;
@@ -876,6 +1142,34 @@ function registerIpc() {
 
   // 用户在浮窗提交提问 → 调模型 → 弹卡片显示
   handle('ai-interpret-ask', async (_e, payload = {}) => {
+    // 个人测算"解算"：对当前档案做一次深度 AI 解读，返回文本（由卡片追加显示）
+    if (payload.profile === true) {
+      const profile = store.get('profile') || {};
+      const profileMode = store.get('profileMode') || 'comprehensive';
+      if (!profile.birthday) return { ok: false, error: 'NO_BIRTHDAY' };
+      const aiCfg = await resolveAiConfig();
+      if (!aiCfg.token) return { ok: false, error: 'NO_TOKEN' };
+      try {
+        const data = fortune.genProfile({
+          dateKey: fortune.getTodayKey(),
+          profile,
+          profileMode,
+        });
+        const result = await ai.interpretFortune({
+          style: 'profile',
+          fortuneData: data,
+          ctx: { dateKey: fortune.getTodayKey(), zodiac: store.get('zodiac') },
+          aiConfig: aiCfg,
+        });
+        logger.info('ai.profileDecode', `tokens=${result.usage.total_tokens || '?'}`);
+        return { ok: true, text: result.text };
+      } catch (e) {
+        const msg = String(e.message || e);
+        logger.error('ai.profileDecode', msg);
+        return { ok: false, error: msg };
+      }
+    }
+
     const query = (payload.query || '').trim();
     if (!query) return { ok: false, error: 'EMPTY_QUERY' };
 
@@ -1128,6 +1422,7 @@ app.whenReady().then(() => {
   applyAutoStart(store.get('autoStart') === true);
   startCursorPolling();
   startWatcher();
+  startSpiritAccum();
 
   // 启动 5 秒后跑一次自检（给窗口/托盘/快捷键留出初始化时间）
   setTimeout(() => {
@@ -1168,6 +1463,7 @@ app.on('will-quit', () => {
   logger.info('main.lifecycle', 'will-quit');
   try { globalShortcut.unregisterAll(); } catch {}
   if (cursorPollTimer) clearInterval(cursorPollTimer);
+  if (spiritTimer) clearInterval(spiritTimer);
 });
 
 // ---------- 主进程轮询光标位置，独立决策 ignore-mouse ----------

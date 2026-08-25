@@ -33,7 +33,7 @@ label { display: block; margin-bottom: 14px; }
 label span { display: block; margin-bottom: 6px; color: #b8bcc5; }
 label small { display: block; margin-top: 4px; color: #6c7280; font-size: 11px; }
 label small code { background: #2a2f3a; padding: 1px 5px; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; }
-input[type=text], input[type=password], select {
+input[type=text], input[type=password], input[type=date], select {
   width: 100%;
   background: #242832;
   border: 1px solid #353a47;
@@ -45,6 +45,7 @@ input[type=text], input[type=password], select {
   outline: none;
   transition: border-color 0.15s;
 }
+input[type=date] { color-scheme: dark; }
 select {
   cursor: pointer;
   appearance: none;

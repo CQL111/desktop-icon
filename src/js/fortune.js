@@ -7,6 +7,7 @@ const tarot = require('./data/tarot');
 const colors = require('./data/colors');
 const quotes = require('./data/quotes');
 const hourGuidance = require('./data/hourGuidance');
+const persona = require('./data/persona');
 const logger = require('./logger');
 
 // ---------- 种子化随机数 ----------
@@ -342,9 +343,23 @@ function genHourFortune(ctx) {
   const ji = pickN(rng, yiji.ji, 1 + Math.floor(rng() * 2));
   const luckyColor = pick(rng, colors.lucky);
   const score = 3 + Math.floor(rng() * 3); // 此刻给个偏正面分（3-5）
+
+  // 融合个人（若已填生日 → 生肖/星座）
+  let personal = null;
+  const profile = ctx.profile;
+  if (profile && profile.birthday) {
+    const [py, pm, pd] = String(profile.birthday).split('-').map(Number);
+    if (py && pm && pd) {
+      personal = {
+        shengxiao: persona.getShengxiao(py),
+        zodiac: tarot.getZodiac(pm, pd).name,
+      };
+    }
+  }
+
   return {
     style: 'moment',
-    styleLabel: '此刻运势',
+    styleLabel: '此刻个人运势',
     score,
     mood: scoreToMood(score),
     date: ctx.dateKey,
@@ -357,6 +372,7 @@ function genHourFortune(ctx) {
     yi,
     ji,
     luckyColor,
+    personal,   // { shengxiao, zodiac } | null
   };
 }
 
@@ -439,6 +455,149 @@ function genWeekFortune(ctx) {
   };
 }
 
+// ---------- 今日黄历 ----------
+function genAlmanac(ctx) {
+  const dateKey = ctx.dateKey;
+  const [y] = String(dateKey).split('-').map(Number);
+  const rng = makeRng(`almanac|${dateKey}`);
+  const yearGanzhi = persona.getYearGanzhi(y);     // '甲辰'
+  const shengxiao = persona.getShengxiao(y);        // '龙'
+  const yi = pickN(rng, yiji.yi, 3);
+  const ji = pickN(rng, yiji.ji, 3);
+  const luckyColor = pick(rng, colors.lucky);
+  const luckyNum = 1 + Math.floor(rng() * 9);
+  return {
+    style: 'almanac',
+    styleLabel: '今日黄历',
+    date: dateKey,
+    yearGanzhi,
+    shengxiao,
+    yi,
+    ji,
+    luckyColor,
+    luckyNum,
+  };
+}
+
+// ---------- 个人测算 ----------
+// 12 星座性格（用于 zodiac mode）
+const ZODIAC_TRAITS = {
+  '白羊座': '热情直率，行动力强，喜欢挑战，但偶尔急躁。',
+  '金牛座': '沉稳务实，重视安全感，一旦认定就很有耐心。',
+  '双子座': '思维敏捷，好奇心重，善沟通，但注意力易分散。',
+  '巨蟹座': '顾家感性，直觉敏锐，重视情感连接。',
+  '狮子座': '大方自信，有领导气质，渴望被认可。',
+  '处女座': '细心追求完美，擅长分析，对自己要求高。',
+  '天秤座': '优雅公正，重视和谐，善于权衡利弊。',
+  '天蝎座': '专注深情，洞察力强，意志坚定。',
+  '射手座': '热爱自由，乐观豁达，喜欢探索未知。',
+  '摩羯座': '自律有野心，脚踏实地，懂得延迟满足。',
+  '水瓶座': '创新独立，思想超前，重视个人空间。',
+  '双鱼座': '浪漫共情，富有想象力，情感细腻。',
+};
+
+// 星座当日运势
+const ZODIAC_LUCK = [
+  '今日宜主动出击，机会稍纵即逝。',
+  '适合静心规划，把节奏放慢一点。',
+  '宜与人沟通，贵人可能藏在日常对话里。',
+  '宜独处思考，想清楚再行动。',
+  '今日精力充沛，适合推进重要事项。',
+  '宜关注健康，早睡胜过一切补品。',
+  '今日适合表达，把心里的话说出来。',
+];
+
+// 综合 mode 的性格标签（由 persona.getPersonalityTags 提供，这里补一条今日金句）
+const COMPREHENSIVE_HINTS = [
+  '顺势而为，但别忘倾听自己内心的声音。',
+  '你的特质是一笔财富，今天把它用在正事上。',
+  '守住自己的节奏，不必总和别人比较。',
+  '今日宜把性格中的优势发挥到极致。',
+];
+
+function genProfile(ctx) {
+  const profile = ctx.profile || {};
+  const mode = ctx.profileMode || 'comprehensive';
+  const birthday = profile.birthday;
+  if (!birthday) throw new Error('NO_BIRTHDAY');
+  const [y, m, d] = String(birthday).split('-').map(Number);
+  if (!y || !m || !d) throw new Error('NO_BIRTHDAY');
+
+  const rng = makeRng(`profile|${birthday}|${mode}`);
+
+  const shengxiao = persona.getShengxiao(y);
+  const zodiac = tarot.getZodiac(m, d);
+  const tzInfo = persona.getTimeZoneOrientation();
+  const luckyNum = 1 + Math.floor(rng() * 9);
+  const luckyColor = pick(rng, colors.lucky);
+  const genderLabel = profile.gender === 'female' ? '女' : (profile.gender === 'male' ? '男' : '保密');
+
+  const base = {
+    style: 'profile',
+    styleLabel: '今日个人运势',
+    date: ctx.dateKey,
+    birthday: String(birthday),
+    gender: genderLabel,
+    shengxiao,
+    zodiac: zodiac.name,
+    ruler: zodiac.ruler,
+    element: zodiac.element,
+    tzOrientation: tzInfo.orientation,
+    tzWuxing: tzInfo.wuxing,
+    tzNote: tzInfo.note,
+    luckyNum,
+    luckyColor,
+    almanac: genAlmanac(ctx),   // 融合今日黄历
+    mode,
+  };
+
+  if (mode === 'bazi') {
+    const yearGanZhi = persona.getYearGanzhi(y);
+    const monthZhi = persona.getMonthZhi(m);
+    const wuxingDist = persona.getWuxingDistribution(
+      [persona.TIAN_GAN.indexOf(yearGanZhi[0])],
+      [persona.DI_ZHI.indexOf(yearGanZhi[1]), persona.DI_ZHI.indexOf(monthZhi)]
+    );
+    // 转成中文 key 输出
+    const distLabel = {};
+    for (const [k, v] of Object.entries(wuxingDist)) {
+      distLabel[colors.wuxing[k] ? colors.wuxing[k].element : k] = v;
+    }
+    const dominantKey = Object.entries(wuxingDist).sort((a, b) => b[1] - a[1])[0][0];
+    const dominantLabel = colors.wuxing[dominantKey] ? colors.wuxing[dominantKey].element : dominantKey;
+    return {
+      ...base,
+      modeLabel: '八字排盘',
+      yearGanZhi,
+      monthZhi,
+      wuxingDist: distLabel,
+      dominantWuxing: dominantKey,
+      dominantLabel,
+      score: Math.max(1, Math.min(5, 3 + (wuxingDist[dominantKey] || 0))),
+    };
+  }
+
+  if (mode === 'zodiac') {
+    return {
+      ...base,
+      modeLabel: '星座性格',
+      zodiacTraits: ZODIAC_TRAITS[zodiac.name] || '',
+      zodiacLuck: pick(rng, ZODIAC_LUCK),
+      score: 3 + Math.floor(rng() * 3),
+    };
+  }
+
+  // comprehensive（默认）
+  const personalityTags = persona.getPersonalityTags(shengxiao, zodiac.name, profile.gender);
+  return {
+    ...base,
+    modeLabel: '综合命理档案',
+    personalityTags,
+    comprehensiveHint: pick(rng, COMPREHENSIVE_HINTS),
+    score: 4,
+  };
+}
+
 module.exports = {
   generate,
   getTodayKey,
@@ -448,5 +607,7 @@ module.exports = {
   genHourFortune,
   genTomorrowFortune,
   genWeekFortune,
+  genProfile,
+  genAlmanac,
   STYLE_LABELS,
 };

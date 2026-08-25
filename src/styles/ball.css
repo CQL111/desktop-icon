@@ -226,11 +226,41 @@ html, body {
   transform: scale(0.6);
   transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-/* 4 个位置：上 / 右 / 下 / 左 */
-.sign-chip[data-scope="moment"]   { left: 28px; top:  -32px; transition-delay: 0.00s; }
-.sign-chip[data-scope="today"]    { left: 88px; top:  28px;  transition-delay: 0.04s; }
-.sign-chip[data-scope="tomorrow"] { left: 28px; top:  88px;  transition-delay: 0.08s; }
-.sign-chip[data-scope="week"]     { left: -32px; top: 28px;  transition-delay: 0.12s; }
+/* 4 个签均匀分布（上 / 右 / 下 / 左）*/
+.sign-chip[data-scope="moment"]  { left: 28px;  top: -28px; transition-delay: 0.00s; }
+.sign-chip[data-scope="today"]   { left: 88px;  top: 28px;  transition-delay: 0.04s; }
+.sign-chip[data-scope="profile"] { left: 28px;  top: 88px;  transition-delay: 0.08s; }
+.sign-chip[data-scope="spirit"]  { left: -32px; top: 28px;  transition-delay: 0.12s; }
+
+/* 精灵状态气泡（默认隐藏，状态差时显示） */
+.pet-bubble {
+  position: absolute;
+  left: 50%;
+  top: -28px;
+  transform: translateX(-50%);
+  background: rgba(26, 29, 36, 0.92);
+  color: #ffb347;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 5;
+}
+.pet-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(26, 29, 36, 0.92);
+  border-bottom: none;
+}
+.pet-bubble.show { opacity: 1; }
 
 .sign-chip:hover {
   background: rgba(255, 255, 245, 1);
