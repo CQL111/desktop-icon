@@ -1,0 +1,12 @@
+# electron-builder.yml
+appId: com.yourcompany.app
+productName: fortune-ball
+directories:
+  output: dist
+win:
+  target: nsis
+publish:
+  provider: github
+  owner: cql
+  repo: desktop-icon
+  releaseType: release
