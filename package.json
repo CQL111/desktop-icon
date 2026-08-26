@@ -1,6 +1,6 @@
 {
   "name": "fortune-ball",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "main": "main.js",
   "description": "桌面悬浮球 - 点击查看今日运势",
   "scripts": {
