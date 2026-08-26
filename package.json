@@ -1,15 +1,16 @@
 {
   "name": "fortune-ball",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "main": "main.js",
   "description": "桌面悬浮球 - 点击查看今日运势",
   "scripts": {
     "start": "electron .",
-    "release": "standard-version",
     "start:hidden": "electron . --hidden",
     "clean": "rimraf dist",
-    "prebuild": "npm run clean && npm run release",
-    "build": "node scripts/build.js",
+    "prebuild": "npm run clean ",
+    "build": "electron-builder --win",
+    "prerelease": "npm run clean && standard-version",
+    "release": " node scripts/release.js",
     "build:local": "npm run clean && electron-builder --win --publish never",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
