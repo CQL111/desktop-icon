@@ -1,3 +1,9 @@
+# Changelog
+
+All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+
+### [0.1.1](https://github.com/CQL111/desktop-icon/compare/v0.0.3...v0.1.1) (2026-08-26)
+
 # 今日运势 · 桌面悬浮球 — 版本迭代记录
 
 > 一个 Windows 桌面悬浮球应用：点击球测算今日运势，养一只会加持运势的精灵，结合 AI（DeepSeek）生成个性化解读。

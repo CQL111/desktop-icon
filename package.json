@@ -1,12 +1,14 @@
 {
   "name": "fortune-ball",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "main.js",
   "description": "桌面悬浮球 - 点击查看今日运势",
   "scripts": {
     "start": "electron .",
+    "release": "standard-version",
     "start:hidden": "electron . --hidden",
-    "build:win": "electron-builder --win",
+    "prebuild": "npm run release",
+    "build": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
   },
@@ -19,7 +21,8 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^30.5.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "standard-version": "^9.5.0"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
