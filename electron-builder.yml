@@ -7,6 +7,6 @@ win:
   target: nsis
 publish:
   provider: github
-  owner: cql
+  owner: CQL111
   repo: desktop-icon
   releaseType: release

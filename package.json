@@ -9,8 +9,10 @@
     "clean": "rimraf dist",
     "prebuild": "npm run clean ",
     "build": "electron-builder --win",
-    "prerelease": "npm run clean && standard-version",
-    "release": " node scripts/release.js",
+    "release": "node scripts/release.js",
+    "release:patch": "node scripts/release.js patch",
+    "release:minor": "node scripts/release.js minor",
+    "release:major": "node scripts/release.js major",
     "build:local": "npm run clean && electron-builder --win --publish never",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
