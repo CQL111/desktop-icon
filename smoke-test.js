@@ -250,5 +250,145 @@ const pickedStyle = behaviorMod.pickStyle({ traditional: { clicks: 3, view_secon
 assert(behaviorMod.STYLES.includes(pickedStyle), 'behavior.pickStyle 返回合法 style');
 assert(typeof behaviorMod.recordInteraction(fakeBehavior, 'modern', 5) === 'object', 'recordInteraction 返回对象');
 
-console.log(`\n总计: ${passed} 通过, ${failed} 失败`);
-process.exit(failed > 0 ? 1 : 0);
+// ===== 聊天 agent tools（不调 LLM）=====
+const agent = require('./src/js/agent');
+assert(agent.TOOLS.length >= 6, 'agent tools 数量');
+const almanacTool = agent.executeTool('get_almanac', { date: '2026-08-20' }, {});
+assert(almanacTool.yearGanzhi === '丙午', 'agent get_almanac 2026=丙午');
+const noBday = agent.executeTool('get_personal_chart', {}, { profile: {} });
+assert(noBday.error === 'NO_BIRTHDAY', 'agent 无生日返回 NO_BIRTHDAY');
+const lotsTool = agent.executeTool('get_today_fortune', { style: 'lots' }, { todayKey: '2026-08-20' });
+assert(lotsTool.style === 'lots' && lotsTool.poem, 'agent get_today_fortune lots');
+const unknown = agent.executeTool('not_a_tool', {}, {});
+assert(unknown.error === 'UNKNOWN_TOOL', 'agent 未知 tool');
+assert(agent.parseArgs('{"dimension":"财运"}').dimension === '财运', 'agent parseArgs');
+assert(agent.TOOLS.length === 7, '默认个人 tools 仍是 7 个');
+assert(!agent.TOOLS.some((t) => t.function.name === 'group_by_birthday'), '默认 tools 不含分组');
+assert(Array.isArray(agent.SCENES) && agent.SCENES.some((s) => s.id === 'group_by_birthday'), '场景表含生日分组');
+assert(agent.resolveScene('按生日3人一组 1995-07-20', [], '') === agent.SCENES[0].id, '注册表 resolveScene 返回场景 id');
+
+const groupByBirthday = require('./src/js/scenarios/groupByBirthday');
+assert(groupByBirthday.shouldActivate('今天运势怎么样', []) === false, '普通问运势不激活分组');
+assert(groupByBirthday.shouldActivate('按生日把这9人3人一组：张三 1995-07-20', []) === true, '分组+生日激活');
+assert(groupByBirthday.shouldActivate('3人一组', [{ role: 'user', content: '名单生日如下 1998-01-05' }]) === true, '跨轮话也能激活');
+
+const nine = [
+  { name: '张三', birthday: '1995-07-20' },
+  { name: '李四', birthday: '1998-01-05' },
+  { name: '王五', birthday: '1991-11-11' },
+  { name: '赵六', birthday: '2000-03-03' },
+  { name: '钱七', birthday: '1993-09-09' },
+  { name: '孙八', birthday: '1988-12-12' },
+  { name: '周九', birthday: '1996-06-06' },
+  { name: '吴十', birthday: '1994-04-04' },
+  { name: '郑十一', birthday: '1997-08-08' },
+];
+const grouped = groupByBirthday.group({ people: nine, groupSize: 3 });
+assert(grouped.groups.length === 3, `9人3组实际 ${grouped.groups.length}`);
+assert(grouped.groups.every((g) => g.members.length === 3), '每组 3 人');
+assert(grouped.leftover.length === 0, '9人整除无剩余');
+const names = grouped.groups.flatMap((g) => g.members.map((m) => m.name));
+assert(names.length === 9 && nine.every((p) => names.includes(p.name)), '9 人全部入组');
+const g2 = groupByBirthday.group({ people: nine, groupSize: 3 });
+assert(JSON.stringify(g2) === JSON.stringify(grouped), '同名单分组稳定');
+const ten = nine.concat([{ name: '我', birthday: '1990-01-01' }]);
+const grouped9 = groupByBirthday.group({ people: ten, groupSize: 3, excludeNames: ['我'] });
+assert(grouped9.groups.length === 3 && grouped9.leftover.length === 0, '排除自己后 9 人 3 组');
+const viaAgent = agent.executeTool('group_by_birthday', { people: nine, groupSize: 3 });
+assert(viaAgent.groups.length === 3, 'agent 能分发 group_by_birthday');
+
+assert(agent.resolveScene('今天运势', [], '') === '', '普通话无场景');
+assert(agent.resolveScene('按生日3人一组 1995-07-20', [], '') === 'group_by_birthday', '首句点亮分组场景');
+assert(agent.resolveScene('改成两人一组', [{ role: 'assistant', content: '已分好' }], 'group_by_birthday') === 'group_by_birthday', '场景粘滞');
+assert(agent.resolveScene('改成两人一组', [{ role: 'assistant', content: '已分好' }], '') === '', '无粘滞则第二句不点亮');
+
+const manyTurns = [];
+for (let i = 0; i < 12; i++) {
+  manyTurns.push({ role: 'user', content: 'u' + i });
+  manyTurns.push({ role: 'assistant', content: 'a' + i });
+  manyTurns.push({ role: 'tool', tool_call_id: 't' + i, content: '{}' });
+}
+const trimmed = agent.trimByUserTurns(manyTurns, 8);
+const trimmedUsers = trimmed.filter((m) => m.role === 'user');
+assert(trimmedUsers.length === 8, `按轮裁剪留 8 轮，实际 ${trimmedUsers.length}`);
+assert(trimmedUsers[0].content === 'u4', '裁掉最早的用户轮');
+const ui = agent.publicHistory(trimmed);
+assert(ui.every((m) => m.role === 'user' || m.role === 'assistant'), '界面历史不含 tool');
+const dumped = JSON.parse(JSON.stringify({ messages: trimmed, scene: 'group_by_birthday' }));
+assert(dumped.messages.length === trimmed.length && dumped.scene === 'group_by_birthday', '会话可 JSON 落盘');
+
+(async () => {
+  const seen = [];
+  const fakeLLM = async ({ messages, tools }) => {
+    seen.push({
+      users: messages.filter((m) => m.role === 'user').map((m) => m.content),
+      hasGroupTool: (tools || []).some((t) => t.function && t.function.name === 'group_by_birthday'),
+      hasPrevAssistant: messages.some((m) => m.role === 'assistant'),
+    });
+    const last = messages[messages.length - 1];
+    if (last.role === 'user' && /一组/.test(last.content) && !messages.some((m) => m.role === 'tool')) {
+      return {
+        content: '',
+        tool_calls: [{
+          id: 'call_g',
+          function: {
+            name: 'group_by_birthday',
+            arguments: JSON.stringify({
+              people: [
+                { name: '张三', birthday: '1995-07-20' },
+                { name: '李四', birthday: '1998-01-05' },
+                { name: '王五', birthday: '1991-11-11' },
+              ],
+              groupSize: 3,
+            }),
+          },
+        }],
+        usage: {},
+      };
+    }
+    return { content: '本轮已根据记录作答', tool_calls: [], usage: {} };
+  };
+  const cfg = { token: 'test', baseUrl: 'http://127.0.0.1', model: 'test' };
+  const t1 = await agent.runAgent({
+    history: [],
+    userQuery: '按生日把3人一组：张三 1995-07-20',
+    aiConfig: cfg,
+    ctx: { scene: '' },
+    callLLM: fakeLLM,
+  });
+  assert(t1.scene === 'group_by_birthday', '第一轮记下分组场景');
+  assert(t1.toolsUsed.includes('group_by_birthday'), '第一轮调用了分组 tool');
+  assert(t1.history.some((m) => m.role === 'user'), 'history 含用户句');
+  const t2 = await agent.runAgent({
+    history: t1.history,
+    userQuery: '改成两人一组',
+    aiConfig: cfg,
+    ctx: { scene: t1.scene },
+    callLLM: fakeLLM,
+  });
+  const lastSeen = seen[seen.length - 1];
+  assert(lastSeen.users.includes('按生日把3人一组：张三 1995-07-20'), '第二轮 LLM 看得到第一句');
+  assert(lastSeen.hasGroupTool === true, '粘滞后仍挂分组 tool');
+  assert(t2.history.filter((m) => m.role === 'user').length >= 2, '两轮用户句都在缓存 history 里');
+
+  const t3 = await agent.runAgent({
+    history: [],
+    userQuery: '今天运势如何',
+    aiConfig: cfg,
+    ctx: { scene: '' },
+    callLLM: async ({ tools }) => {
+      seen.push({ hasGroupTool: (tools || []).some((t) => t.function && t.function.name === 'group_by_birthday') });
+      return { content: '今日平稳', tool_calls: [], usage: {} };
+    },
+  });
+  assert(t3.scene === '', '普通问运势无场景');
+  assert(seen[seen.length - 1].hasGroupTool === false, '普通问运势不挂分组 tool');
+
+  console.log(`\n总计: ${passed} 通过, ${failed} 失败`);
+  process.exit(failed > 0 ? 1 : 0);
+})().catch((e) => {
+  failed++;
+  console.log('  ✗ async', e.stack || e.message);
+  console.log(`\n总计: ${passed} 通过, ${failed} 失败`);
+  process.exit(1);
+});

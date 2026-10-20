@@ -1,42 +1,17 @@
-// ai.js - MiniMax LLM 调用封装（主进程侧）
+// ai.js - LLM 调用封装（主进程侧）
 // 用 Electron 内置 net.fetch，无需第三方依赖
+// 线上：DeepSeek OpenAI 兼容 API；备用：本地 Ollama
 // 所有调用失败都 throw，由调用方决定降级（卡片不显示 AI 区）
-//
-// 支持两种端点（按 baseUrl 自动识别）：
-//   1. Anthropic 兼容（官方推荐）：  POST /anthropic/v1/messages
-//      Header: Authorization: Bearer <MINIMAX_API_KEY>
-//      Body:   { model, max_tokens, system?, messages: [{role,content}], temperature? }
-//      Resp:   { content: [{type:'text', text:'...'}, ...], usage, model }
-//   2. OpenAI 兼容：                  POST /v1/chat/completions
-//      Header: Authorization: Bearer <MINIMAX_API_KEY>
-//      Body:   { model, messages, temperature?, max_tokens, response_format? }
-//      Resp:   { choices:[{message:{content:'...'}}], usage, model }
 
 const { net } = require('electron');
 const logger = require('./logger');
 
-// 运势场景推荐：M2-her（官方文档说"专为对话场景设计，支持角色扮演和多轮对话"）
-const DEFAULT_MODEL = 'MiniMax-M2-her';
-const FALLBACK_MODEL = 'MiniMax-M2.7';
+const DEFAULT_MODEL = 'deepseek-chat';
 
-// 探测端点：根据 baseUrl 形态返回 { kind, url }
+// 探测端点：OpenAI 兼容 /v1/chat/completions；localhost 视为本地模型
 function detectEndpoint(baseUrl) {
-  // 先去掉 trailing slash
   let u = String(baseUrl || '').trim().replace(/\/+$/, '');
-  // 识别本地模型（Ollama / LM Studio 等 localhost 端点）
   const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(u);
-
-  // 用户明确填了 Anthropic 路径 → 走 Anthropic 协议
-  if (u.endsWith('/anthropic')) {
-    return { kind: 'anthropic', url: u + '/v1/messages', isLocal };
-  }
-  // 旧格式兜底（如果用户填了带 anthropic_api 字样的）
-  if (u.includes('anthropic_api') || u.includes('anthropic-api')) {
-    logger.warn('ai.endpoint', `fallback path: ${baseUrl}`);
-    return { kind: 'anthropic', url: u, isLocal };
-  }
-
-  // OpenAI 路径：去掉末尾 /v\d+（如有），拼 /v1/chat/completions
   u = u.replace(/\/v\d+$/, '');
   return { kind: 'openai', url: u + '/v1/chat/completions', isLocal };
 }
@@ -77,35 +52,18 @@ const SYSTEM_PROMPTS = {
 // ---------- Token 区域辅助 ----------
 function normalizeBaseUrl(baseUrl) {
   let url = String(baseUrl || '').trim().replace(/\/+$/, '');
-  // 官方推荐：Anthropic 兼容用 minimaxi.com/anthropic
-  if (!url) return 'https://api.minimaxi.com/anthropic';
-  // 如果是 anthropic 端点路径，不要强行加 /v1
-  if (url.endsWith('/anthropic') || url.includes('anthropic_api') || url.includes('anthropic-api')) {
-    return url;
-  }
+  if (!url) return 'https://api.deepseek.com/v1';
   if (!/\/v\d+$/.test(url)) url += '/v1';
   return url;
 }
 
-function chatCompletionsUrl(baseUrl) {
-  // 兼容两种：用户可能填到 /v1 或更深，自动拼到 chatcompletion_v2
-  const u = normalizeBaseUrl(baseUrl);
-  if (u.endsWith('/chatcompletion_v2')) return u;
-  return `${u}/text/chatcompletion_v2`;
-}
-
 // ---------- 核心：callLLM ----------
 /**
- * 调用 MiniMax chat completions（自动按 OpenAI / Anthropic 兼容协议）。
+ * 调用 OpenAI 兼容 chat completions（DeepSeek / 本地 Ollama）。
  * @param {Object} opts
- * @param {string} opts.baseUrl    - 如 "https://api.minimaxi.chat/v1" 或 ".../anthropic"
- * @param {string} opts.token      - 明文 token
- * @param {Array}  opts.messages   - [{role, content}, ...]  支持 'system' / 'user' / 'assistant'
- * @param {string} [opts.model]
- * @param {number} [opts.temperature]
- * @param {number} [opts.maxTokens]
- * @param {number} [opts.timeoutMs]
- * @returns {Promise<{content:string, usage:object, model:string}>}
+ * @param {string} opts.baseUrl    - 如 "https://api.deepseek.com/v1"
+ * @param {string} opts.token      - 明文 token（本地可空）
+ * @param {Array}  opts.messages   - [{role, content}, ...]
  */
 async function callLLM({
   baseUrl,
@@ -115,46 +73,30 @@ async function callLLM({
   temperature = 0.7,
   maxTokens = 600,
   timeoutMs = 12000,
+  tools,
+  jsonMode,
 }) {
   if (!Array.isArray(messages) || messages.length === 0) throw new Error('NO_MESSAGES');
 
   const ep = detectEndpoint(baseUrl);
   if (!token && !ep.isLocal) throw new Error('NO_TOKEN');
   const startTs = Date.now();
-  logger.info('ai.callLLM', `kind=${ep.kind} model=${model} local=${ep.isLocal} timeout=${timeoutMs}`);
+  const hasTools = Array.isArray(tools) && tools.length > 0;
+  logger.info('ai.callLLM', `model=${model} local=${ep.isLocal} tools=${hasTools} timeout=${timeoutMs}`);
 
-  // 拆 system / 其余 messages（Anthropic 协议要求 system 在顶级字段）
-  let systemText = '';
-  let chatMessages = messages;
-  if (ep.kind === 'anthropic') {
-    const sysIdx = messages.findIndex((m) => m.role === 'system');
-    if (sysIdx >= 0) {
-      systemText = String(messages[sysIdx].content || '');
-      chatMessages = messages.filter((_, i) => i !== sysIdx);
-    }
+  const body = {
+    model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+  };
+  if (hasTools) {
+    body.tools = tools;
+    body.tool_choice = 'auto';
   }
-
-  let body;
-  if (ep.kind === 'anthropic') {
-    // Anthropic Messages API 兼容
-    body = {
-      model,
-      system: systemText,
-      messages: chatMessages.map((m) => ({ role: m.role, content: m.content })),
-      max_tokens: maxTokens,
-      temperature,
-    };
-  } else {
-    // OpenAI 兼容
-    body = {
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    };
-    // 本地模型（qwen 等）对 json_object 支持不稳定，改在 prompt 里要求 JSON
-    if (!ep.isLocal) body.response_format = { type: 'json_object' };
-  }
+  // tool 调用不能强制 json_object；本地模型对 json_object 也不稳
+  const wantJson = jsonMode !== undefined ? jsonMode : (!hasTools && !ep.isLocal);
+  if (wantJson) body.response_format = { type: 'json_object' };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -165,7 +107,6 @@ async function callLLM({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // 国内 Anthropic 兼容端点用 Bearer，国内 OpenAI 兼容也用 Bearer
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
@@ -195,35 +136,17 @@ async function callLLM({
     throw new Error(`HTTP_${status}: ${msg}`);
   }
 
-  let content;
-  let normalizedUsage;
-  if (ep.kind === 'anthropic') {
-    // Anthropic 格式：content: [{type:'thinking', thinking:'...'}, {type:'text', text:'...'}]
-    // 我们只要 text，跳过 thinking（避免 thinking 内容混入解读）
-    const blocks = Array.isArray(json?.content) ? json.content : [];
-    content = blocks
-      .filter((b) => b && b.type === 'text')
-      .map((b) => b.text || '')
-      .join('');
-    // Anthropic usage 是 input_tokens / output_tokens，没有 total_tokens
-    normalizedUsage = json?.usage
-      ? {
-          prompt_tokens: json.usage.input_tokens || 0,
-          completion_tokens: json.usage.output_tokens || 0,
-          total_tokens: (json.usage.input_tokens || 0) + (json.usage.output_tokens || 0),
-        }
-      : {};
-  } else {
-    // OpenAI 格式：choices[0].message.content
-    content = json?.choices?.[0]?.message?.content;
-    normalizedUsage = json?.usage || {};
-  }
+  const message = json?.choices?.[0]?.message || {};
+  const content = message.content || '';
+  const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  const normalizedUsage = json?.usage || {};
+  if (!content && toolCalls.length === 0) throw new Error('EMPTY_RESPONSE');
 
-  if (!content) throw new Error('EMPTY_RESPONSE');
-
-  logger.info('ai.callLLM', `done ${Date.now() - startTs}ms tokens=${normalizedUsage.total_tokens || '?'}`);
+  logger.info('ai.callLLM', `done ${Date.now() - startTs}ms tokens=${normalizedUsage.total_tokens || '?'} tools=${toolCalls.length}`);
   return {
     content,
+    tool_calls: toolCalls,
+    finish_reason: json?.choices?.[0]?.finish_reason || '',
     usage: normalizedUsage,
     model: json.model || model,
   };
@@ -418,7 +341,6 @@ async function diagnose({ line, recentLines = [], meta = {}, aiConfig, ctx = {} 
 
 module.exports = {
   DEFAULT_MODEL,
-  FALLBACK_MODEL,
   normalizeBaseUrl,
   detectEndpoint,
   callLLM,

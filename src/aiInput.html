@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.minimax.io https://api.minimaxi.chat https://api.minimaxi.com https://api.minimaxi.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.deepseek.com;">
   <title>问问运势</title>
   <link rel="stylesheet" href="styles/aiInput.css">
 </head>
@@ -11,10 +11,12 @@
     <div class="ai-input-header">
       <span class="ai-icon">✨</span>
       <span class="ai-title">问问运势</span>
+      <button class="ai-reset" id="reset" title="新对话">新对话</button>
       <button class="ai-close" id="close" title="关闭">×</button>
     </div>
     <div class="ai-input-body">
-      <textarea id="query" placeholder="想问点什么呢？例如：下周工作运如何？" rows="2" maxlength="200"></textarea>
+      <div class="ai-messages" id="messages"></div>
+      <textarea id="query" placeholder="想问点什么呢？例如：今天宜不宜开会？" rows="2" maxlength="400"></textarea>
       <div class="ai-actions">
         <span class="ai-hint" id="hint">Enter 发送 · Shift+Enter 换行</span>
         <button id="submit" class="ai-submit">问一问</button>

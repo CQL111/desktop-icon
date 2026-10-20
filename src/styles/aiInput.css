@@ -1,4 +1,4 @@
-/* aiInput.css - AI 输入浮窗 */
+/* aiInput.css - AI 对话浮窗 */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
   width: 100%;
@@ -11,7 +11,7 @@ html, body {
 }
 .ai-input {
   width: 380px;
-  height: 190px;
+  height: 480px;
   background: rgba(26, 29, 36, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
@@ -32,6 +32,16 @@ html, body {
 }
 .ai-icon { font-size: 14px; }
 .ai-title { font-size: 13px; font-weight: 500; color: #d0d3da; flex: 1; }
+.ai-reset {
+  background: transparent;
+  border: none;
+  color: #8a8f99;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.ai-reset:hover { background: rgba(255, 255, 255, 0.06); color: #e7e9ee; }
 .ai-close {
   background: transparent;
   border: none;
@@ -47,11 +57,58 @@ html, body {
   line-height: 1;
 }
 .ai-close:hover { background: rgba(255, 255, 255, 0.06); color: #e7e9ee; }
-.ai-input-body { padding: 12px 14px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.ai-input-body {
+  padding: 10px 12px 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.ai-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
+.ai-empty {
+  margin: auto;
+  font-size: 12px;
+  color: #6c7280;
+  text-align: center;
+  line-height: 1.6;
+  padding: 12px;
+}
+.msg {
+  max-width: 92%;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.msg.user {
+  align-self: flex-end;
+  background: #5cb8ff;
+  color: #1a1d24;
+  border-bottom-right-radius: 4px;
+}
+.msg.assistant {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e7e9ee;
+  border-bottom-left-radius: 4px;
+}
 textarea {
   width: 100%;
-  flex: 1;
-  min-height: 56px;
+  height: 56px;
+  flex: none;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
@@ -96,4 +153,3 @@ textarea:focus { border-color: rgba(92, 184, 255, 0.5); }
 .ai-status.error { color: #ff8a8a; }
 .ai-status.info { color: #7dc8ff; }
 .ai-status.success { color: #6cd49a; }
-.loading { color: #7dc8ff; }

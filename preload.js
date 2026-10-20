@@ -67,9 +67,10 @@ contextBridge.exposeInMainWorld('api', {
   openAiInput: () => ipcRenderer.invoke('open-ai-input'),
   closeAiInput: () => ipcRenderer.invoke('close-ai-input'),
   aiInterpretAsk: (payload) => ipcRenderer.invoke('ai-interpret-ask', payload),
+  resetAgentChat: () => ipcRenderer.invoke('reset-agent-chat'),
 
   onAiInputFocus: (handler) => {
-    const listener = () => handler();
+    const listener = (_e, data) => handler(data || {});
     ipcRenderer.on('ai-input-focus', listener);
     return () => ipcRenderer.removeListener('ai-input-focus', listener);
   },
@@ -82,6 +83,11 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_e, err) => handler(err);
     ipcRenderer.on('ai-input-error', listener);
     return () => ipcRenderer.removeListener('ai-input-error', listener);
+  },
+  onAgentProgress: (handler) => {
+    const listener = (_e, info) => handler(info);
+    ipcRenderer.on('ai-agent-progress', listener);
+    return () => ipcRenderer.removeListener('ai-agent-progress', listener);
   },
 
   // ---------- AI 解读增量追加 ----------

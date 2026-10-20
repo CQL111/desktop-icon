@@ -12,6 +12,7 @@ const selfCheck = require('./src/js/selfCheck');
 const localLLM = require('./src/js/localLLM');
 const onlineConfig = require('./src/js/onlineConfig');
 const spirit = require('./src/js/fortuneSpirit');
+const agent = require('./src/js/agent');
 
 // Windows 通知必须先设 appId（在 ready 之前）
 app.setAppUserModelId('com.fortune.ball');
@@ -44,6 +45,7 @@ const store = new Store({
     momentCache: {},       // { 'moment|yyyy-mm-dd|hhKey': { score, data, ts } }
     tomorrowCache: {},     // { 'yyyy-mm-dd': { score, data, ts } }
     weekCache: {},         // { 'yyyy-Www': { score, data, ts } }
+    agentChat: { messages: [], scene: '', updatedAt: 0 },
   },
 });
 
@@ -61,6 +63,32 @@ const BALL_SIZE = 80;
 const CARD_WIDTH = 380;
 const CARD_HEIGHT = 600;
 const CARD_OFFSET = 12; // 卡片距球的偏移
+const AI_INPUT_WIDTH = 380;
+const AI_INPUT_HEIGHT = 480;
+let agentHistory = [];
+let agentScene = '';
+
+function loadAgentChat() {
+  const c = store.get('agentChat') || agent.emptyAgentChat();
+  agentHistory = agent.trimByUserTurns(c.messages || []);
+  agentScene = c.scene || '';
+}
+
+function saveAgentChat() {
+  store.set('agentChat', {
+    messages: agent.trimByUserTurns(agentHistory),
+    scene: agentScene || '',
+    updatedAt: Date.now(),
+  });
+}
+
+function clearAgentChat() {
+  agentHistory = [];
+  agentScene = '';
+  store.set('agentChat', agent.emptyAgentChat());
+}
+
+loadAgentChat();
 
 // 统一 AI 配置入口：线上优先（默认硬编码 DeepSeek；用户主动启用本地才用本地）
 async function resolveAiConfig() {
@@ -394,8 +422,8 @@ function _createAiInputWindowImpl() {
     return aiInputWindow;
   }
   aiInputWindow = new BrowserWindow({
-    width: 380,
-    height: 190,
+    width: AI_INPUT_WIDTH,
+    height: AI_INPUT_HEIGHT,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -431,7 +459,7 @@ function positionAiInputNearBall() {
   if (!aiInputWindow || aiInputWindow.isDestroyed()) return;
   const bounds = ballWindow.getBounds();
   const work = screen.getPrimaryDisplay().workArea;
-  const w = 380, h = 190;
+  const w = AI_INPUT_WIDTH, h = AI_INPUT_HEIGHT;
   // 默认放在球右上
   let x = bounds.x + currentBallPos.x + BALL_SIZE + 8;
   let y = bounds.y + currentBallPos.y - 20;
@@ -583,13 +611,7 @@ function rebuildTrayMenu() {
         positionAiInputNearBall();
         win.show();
         win.focus();
-        if (win.webContents.isLoading()) {
-          win.webContents.once('did-finish-load', () => {
-            win.webContents.send('ai-input-focus');
-          });
-        } else {
-          win.webContents.send('ai-input-focus');
-        }
+        sendAiInputFocus(win);
       },
     },
     { type: 'separator' },
@@ -1116,14 +1138,14 @@ function registerIpc() {
     positionAiInputNearBall();
     win.show();
     win.focus();
-    if (win.webContents.isLoading()) {
-      win.webContents.once('did-finish-load', () => {
-        win.webContents.send('ai-input-focus');
-      });
-    } else {
-      win.webContents.send('ai-input-focus');
-    }
+    sendAiInputFocus(win);
     return true;
+  });
+
+  handle('reset-agent-chat', () => {
+    clearAgentChat();
+    logger.info('agent.reset', 'history cleared');
+    return { ok: true, messages: [] };
   });
 
   // 打开精灵面板
@@ -1185,46 +1207,42 @@ function registerIpc() {
       return { ok: false, error: 'NO_TOKEN' };
     }
 
-    // 24h 内同问题缓存
-    const hash = simpleHash(query);
-    const askCache = store.get('aiAskCache') || {};
-    const cached = askCache[hash];
-    if (cached && (Date.now() - cached.ts) < 24 * 3600 * 1000) {
-      showAiCardOnly(query, cached.text);
-      if (aiInputWindow && !aiInputWindow.isDestroyed()) aiInputWindow.hide();
-      return { ok: true, cached: true };
-    }
+    const ctx = {
+      todayKey: fortune.getTodayKey(),
+      profile: store.get('profile') || {},
+      profileMode: store.get('profileMode') || 'comprehensive',
+      spirit: getSpirit(),
+      saveSpirit,
+      behaviorMap: store.get('behavior') || {},
+      zodiac: store.get('zodiac'),
+      posWuxing: getCurrentPosWuxing(),
+      scene: agentScene,
+    };
 
-    if (aiInputWindow && !aiInputWindow.isDestroyed()) {
-      aiInputWindow.webContents.send('ai-input-loading', true);
-    }
+    const sendProgress = (info) => {
+      if (aiInputWindow && !aiInputWindow.isDestroyed()) {
+        aiInputWindow.webContents.send('ai-agent-progress', info);
+      }
+    };
 
     try {
-      const result = await ai.interpretAsk({
+      const result = await agent.runAgent({
+        history: agentHistory,
         userQuery: query,
-        ctx: {
-          dateKey: fortune.getTodayKey(),
-          zodiac: store.get('zodiac'),
-        },
         aiConfig: aiCfg,
+        ctx,
+        callLLM: ai.callLLM,
+        onProgress: sendProgress,
       });
-      askCache[hash] = { text: result.text, ts: Date.now() };
-      const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
-      for (const k of Object.keys(askCache)) {
-        if (askCache[k].ts < cutoff) delete askCache[k];
-      }
-      store.set('aiAskCache', askCache);
-      showAiCardOnly(query, result.text);
-      if (aiInputWindow && !aiInputWindow.isDestroyed()) aiInputWindow.hide();
-      console.log(`[AI] ask interpreted, tokens=${result.usage.total_tokens || '?'}`);
-      logger.info('ai.interpretAsk', `tokens=${result.usage.total_tokens || '?'}`);
-      return { ok: true };
+      agentHistory = result.history || [];
+      agentScene = result.scene || '';
+      saveAgentChat();
+      logger.info('agent.chat', `scene=${agentScene || 'none'} tools=${(result.toolsUsed || []).join(',') || 'none'} tokens=${result.usage.total_tokens || '?'}`);
+      return { ok: true, text: result.text, toolsUsed: result.toolsUsed || [] };
     } catch (e) {
       const msg = String(e.message || e);
-      console.error('[AI] interpretAsk failed:', msg);
-      logger.error('ai.interpretAsk', msg, { query: query.slice(0, 50) });
+      logger.error('agent.chat', msg, { query: query.slice(0, 50) });
       if (aiInputWindow && !aiInputWindow.isDestroyed()) {
-        aiInputWindow.webContents.send('ai-input-loading', false);
         aiInputWindow.webContents.send('ai-input-error', {
           kind: msg,
           text: friendlyError(msg),
@@ -1233,6 +1251,18 @@ function registerIpc() {
       return { ok: false, error: msg };
     }
   });
+}
+
+function sendAiInputFocus(win) {
+  if (!win || win.isDestroyed()) return;
+  const payload = { messages: agent.publicHistory(agentHistory) };
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', () => {
+      if (!win.isDestroyed()) win.webContents.send('ai-input-focus', payload);
+    });
+  } else {
+    win.webContents.send('ai-input-focus', payload);
+  }
 }
 
 // hash 字符串（FNV-1a 32 位，够用）
@@ -1269,6 +1299,7 @@ function friendlyError(code) {
     NETWORK: '网络好像不太给力',
     EMPTY_QUERY: '问题不能为空',
     EMPTY_RESPONSE: '模型没有返回内容',
+    AGENT_MAX_STEPS: '这轮调用太长，请换个说法再问',
   }[code] || ('请求失败：' + code);
 }
 
