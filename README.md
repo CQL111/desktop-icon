@@ -19,7 +19,7 @@ node smoke-test.js # 130 个单元烟雾测试（无需 GUI）
 - **今日黄历**：干支年 + 生肖 + 宜忌 + 幸运色/数字 + 运势评分
 - **今日个人运势**：黄历 + 个人基础信息（生日/性别/时区 → 生肖/星座/五行）
 - **运势精灵**：五项维度加持（摆位积累 + 祈福），叠加到运势分数
-- **AI 解读**：DeepSeek（硬编码，无感）+ 本地 Ollama 可选，卡片底部异步追加
+- **AI 解读**：DeepSeek（`.env` 配 token）+ 本地 Ollama 可选，卡片底部异步追加
 - **系统托盘**：显示/隐藏、抽一签、黄历测算、AI 解读、设置、自启、日志、退出
 - **全局快捷键**：`Ctrl+Alt+F` 唤起抽签
 - **开机自启**：仅 packaged 模式生效
@@ -60,5 +60,5 @@ node smoke-test.js # 130 个单元烟雾测试（无需 GUI）
 
 - 托盘图标暂用空 image（`src/assets/tray.png` 可替换）
 - 黄历暂用干支 + 宜忌（精确农历后期迭代）
-- 线上 token 硬编码在 `onlineConfig.js`（自用）
+- 线上 token：复制 `.env.example` 为 `.env`，填入 `DEEPSEEK_API_KEY`（该文件不进 git）
 - 打包：`npm install -D electron-builder` 后 `npx electron-builder --win`

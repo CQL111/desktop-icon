@@ -90,7 +90,7 @@ function clearAgentChat() {
 
 loadAgentChat();
 
-// 统一 AI 配置入口：线上优先（默认硬编码 DeepSeek；用户主动启用本地才用本地）
+// 统一 AI 配置入口：有可用 Ollama 则本地；否则 `.env` 里的 DeepSeek
 async function resolveAiConfig() {
   const localModel = store.get('localModel') || '';
   if (localModel) {

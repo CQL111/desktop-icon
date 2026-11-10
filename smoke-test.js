@@ -251,6 +251,14 @@ assert(behaviorMod.STYLES.includes(pickedStyle), 'behavior.pickStyle 返回合�
 assert(typeof behaviorMod.recordInteraction(fakeBehavior, 'modern', 5) === 'object', 'recordInteraction 返回对象');
 
 // ===== 聊天 agent tools（不调 LLM）=====
+const fs = require('fs');
+const path = require('path');
+const onlineCfgSrc = fs.readFileSync(path.join(__dirname, 'src/js/onlineConfig.js'), 'utf8');
+assert(!/sk-[a-zA-Z0-9]{8,}/.test(onlineCfgSrc), 'onlineConfig.js 不含硬编码 token');
+const onlineConfig = require('./src/js/onlineConfig');
+assert(typeof onlineConfig.baseUrl === 'string' && onlineConfig.baseUrl.includes('deepseek'), 'onlineConfig baseUrl');
+assert('token' in onlineConfig, 'onlineConfig 有 token 字段（值来自 .env）');
+
 const agent = require('./src/js/agent');
 assert(agent.TOOLS.length >= 6, 'agent tools 数量');
 const almanacTool = agent.executeTool('get_almanac', { date: '2026-08-20' }, {});

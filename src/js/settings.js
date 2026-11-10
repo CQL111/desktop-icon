@@ -1,4 +1,4 @@
-// settings.js - 设置面板逻辑（模型管理：线上 DeepSeek 硬编码 + 本地模型切换/下载）
+// settings.js - 设置面板逻辑（线上 DeepSeek 走 .env + 本地模型切换/下载）
 const $ = (id) => document.getElementById(id);
 
 function showStatus(type, text) {

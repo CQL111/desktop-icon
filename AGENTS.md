@@ -19,7 +19,7 @@
 - **Electron 30.5.1** + **electron-store 8.2.0**（唯一两个依赖）
 - 纯 HTML/CSS/原生 JS，无前端框架、无打包器
 - 主进程 `net.fetch` 调 AI（无 axios/openai SDK）
-- `safeStorage` 已废弃（token 硬编码），用 `electron-log` 式自研 logger
+- 线上 token 放仓库根目录 `.env`（gitignore），`onlineConfig.js` 启动时读取
 
 ## 三、快速上手
 
@@ -55,7 +55,7 @@ src/
     fortuneSpirit.js 运势精灵引擎：五项维度加持（摆位积累 + 祈福限次）
     ai.js            LLM 调用封装：callLLM/interpretFortune/interpretAsk/diagnose/testConnection
     localLLM.js      本地 Ollama 探测/列表/下载
-    onlineConfig.js  DeepSeek 硬编码配置（baseUrl/token/model）
+    onlineConfig.js  从 `.env` 读 DeepSeek（baseUrl/token/model）
     behavior.js      行为打分：时间衰减 softmax 选风格
     logger.js        结构化日志（4 级 + rotation 5MB×10 + token redact）
     watcher.js       日志 tailer：检测错误 → 触发 AI 诊断
@@ -119,7 +119,7 @@ README.md           项目说明（略过时，以本文为准）
 
 ### 5.4 AI 链路
 
-- `resolveAiConfig()`：本地优先（store.localModel 且 Ollama 可用），否则硬编码 DeepSeek
+- `resolveAiConfig()`：本地优先（store.localModel 且 Ollama 可用），否则 `.env` 里的 DeepSeek
 - `tryAppendAiInterpretation()`：抽签后异步追加 AI 解读（缓存命中直接发）
 - `ai.diagnose()`：日志检测到 error → AI 分析 → 系统通知
 
@@ -163,7 +163,7 @@ README.md           项目说明（略过时，以本文为准）
 
 1. **球位置是浮点**，传给 Electron `setPosition`/`BrowserWindow` 前必须 `Math.round`（否则 `conversion failure`）。已有 `getBallScreenPos()` 统一处理。
 2. **高频路径不打日志**：`update-ball-pos`（每帧）、cursor polling（80ms）不记 logger，否则刷爆日志。
-3. **token 硬编码**在 `onlineConfig.js`（自用工具，用户明确要求）。改线上模型改这里。
+3. **线上 token** 只放根目录 `.env`（`DEEPSEEK_API_KEY`），参考 `.env.example`。`onlineConfig.js` 不进密钥。
 4. **AI 失败静默降级**：所有 AI 调用 throw 由上层 catch，卡片仍显示内置内容（离线可用）。
 5. **scope 分发**：新增时间维度在 `main.js draw-fortune` 加分支 + `fortune.js` 加生成器 + `card.js` 加 renderer（RENDERERS 表注册）。
 6. **运势精灵加持**：在 `main.js applyBoost` 统一应用，`spirit.DIM_FIELDS` 处理"爱情/感情"字段名差异。
