@@ -1,10 +1,42 @@
 # electron-builder.yml
-appId: com.yourcompany.app
+# appId 必须与 main.js 里的 app.setAppUserModelId('com.fortune.ball') 保持一致，
+# 否则 Windows 通知、任务栏归组和开机自启会指向不同的应用标识
+appId: com.fortune.ball
 productName: fortune-ball
 directories:
-  output: dist
+  output: release
+# 只打包运行所需文件。注意：electron-builder 不会自动忽略 .env，
+# 这里用白名单把源码、文档、脚本和密钥文件挡在安装包之外。
+files:
+  - main.js
+  - preload.js
+  - package.json
+  - src/**/*
+  - data/canon/index.json
+  - "!**/.env"
+  - "!**/.env.*"
+  - "!**/build/**"
+  - "!**/docs/**"
+  - "!**/scripts/**"
+  - "!**/smoke-test.js"
+  - "!**/product-intro.html"
+  - "!**/data/canon/raw/**"
+  - "!**/data/canon/catalog.json"
+  - "!**/data/canon/zhouyi.json"
+  - "!**/data/canon/ditiansui.json"
+  - "!**/data/canon/yuanhai.json"
+  - "!**/.persona-anim.js"
+  - "!**/.stick-shot.js"
 win:
   target: nsis
+  icon: src/assets/app-icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 今日运势
 publish:
   provider: github
   owner: CQL111

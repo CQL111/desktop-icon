@@ -1,6 +1,7 @@
 // main.js - 主进程
 // 桌面悬浮球 - 今日运势
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, Notification, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, Notification, shell, dialog } = require('electron');
+const crypto = require('crypto');
 const path = require('path');
 const Store = require('electron-store');
 const behavior = require('./src/js/behavior');
@@ -13,6 +14,7 @@ const localLLM = require('./src/js/localLLM');
 const onlineConfig = require('./src/js/onlineConfig');
 const spirit = require('./src/js/fortuneSpirit');
 const agent = require('./src/js/agent');
+const streak = require('./src/js/streak');
 
 // Windows 通知必须先设 appId（在 ready 之前）
 app.setAppUserModelId('com.fortune.ball');
@@ -34,18 +36,23 @@ const store = new Store({
     todayFortune: {},      // { 'yyyy-mm-dd': { style, score, data } }
     behavior: {},          // { styleName: { clicks, view_seconds, last_seen } }
     manualSwitchCount: 0,  // 用户主动"换一换"计数（每 5 次临时降权被切走的风格）
-    aiConfig: { baseUrl: '', encryptedToken: null, tokenObfuscated: null, model: '' },
+    aiConfig: { baseUrl: '', token: '', model: '' },
     localModel: '',         // 用户选择的本地模型名（空 = 用线上）
     profile: { birthday: null, gender: '' },  // 个人测算基础信息
     profileMode: 'comprehensive',              // comprehensive | bazi | zodiac
-    profileCache: {},                          // { 'profile|YYYY-MM-DD|mode': { score, data, ts } }
+    profileCache: {},                          // { 'profile|birthday|mode|YYYY-MM-DD': { score, data, ts } }
     fortuneSpirit: null,                       // 运势精灵（null = 首次用 defaultSpirit）
-    aiCache: {},           // { 'yyyy-mm-dd': { style: { text, usage, ts } } }
+    aiCache: {},           // { 'yyyy-mm-dd': { style: { byKey: { score: { text, usage, ts } } } } }
     aiAskCache: {},        // { hash: { text, ts } }
     momentCache: {},       // { 'moment|yyyy-mm-dd|hhKey': { score, data, ts } }
     tomorrowCache: {},     // { 'yyyy-mm-dd': { score, data, ts } }
     weekCache: {},         // { 'yyyy-Www': { score, data, ts } }
     agentChat: { messages: [], scene: '', updatedAt: 0 },
+    animations: true,      // 点击球时是否播放全屏抽签动画
+    installId: '',         // 首次启动生成，本机运势种子；重装会变
+    dailyReminder: { enabled: false, time: '09:00', lastNotifiedDate: '' }, // 每日一签提醒
+    persona: 'cat',        // 桌面形象：cat | dog | caishen | lots
+    streak: { count: 0, best: 0, lastDate: '' }, // 连续看运天数
   },
 });
 
@@ -58,6 +65,9 @@ let isQuitting = false;
 let currentBallPos = { x: 0, y: 0 };
 const BALL_HALO = 40;
 let lastIgnoreState = null;
+// 菜单打开时渲染端上报的「猫 + 面板」外接矩形（屏幕坐标，null = 只用猫身热区）
+let ballHitRegion = null;
+
 
 const BALL_SIZE = 80;
 const CARD_WIDTH = 380;
@@ -90,7 +100,44 @@ function clearAgentChat() {
 
 loadAgentChat();
 
-// 统一 AI 配置入口：有可用 Ollama 则本地；否则 `.env` 里的 DeepSeek
+// 旧版把 API Key 写在 aiConfig.encryptedToken（实际是 base64，非真加密）。
+// 新版统一用明文 aiConfig.token；首次启动时迁移一次，避免用户已保存的 Key 丢失。
+function migrateLegacyAiConfig() {
+  const cfg = store.get('aiConfig');
+  if (!cfg || typeof cfg !== 'object') return;
+  const hasToken = typeof cfg.token === 'string' && cfg.token.trim();
+  const legacy = cfg.encryptedToken;
+  if (!hasToken && typeof legacy === 'string' && legacy) {
+    try {
+      const token = Buffer.from(legacy, 'base64').toString('utf8').trim();
+      // OpenAI 兼容服务的 Key 都形如 sk-...；不是这个格式就不猜，等用户重新填写
+      if (/^sk-[A-Za-z0-9_\-]+$/.test(token)) {
+        store.set('aiConfig', { ...cfg, token, encryptedToken: undefined, tokenObfuscated: undefined });
+        logger.info('aiConfig', 'migrated legacy encryptedToken → token');
+      } else {
+        logger.warn('aiConfig', 'legacy encryptedToken present but format unrecognized, skipped');
+      }
+    } catch (e) {
+      logger.warn('aiConfig', `legacy token migration failed: ${e.message}`);
+    }
+  } else if (cfg.encryptedToken !== undefined || cfg.tokenObfuscated !== undefined) {
+    // 已经有新字段了，顺手清掉旧字段
+    store.set('aiConfig', { ...cfg, encryptedToken: undefined, tokenObfuscated: undefined });
+  }
+}
+migrateLegacyAiConfig();
+
+function ensureInstallId() {
+  const cur = store.get('installId');
+  if (typeof cur === 'string' && cur.length >= 8) return cur;
+  const id = crypto.randomUUID();
+  store.set('installId', id);
+  logger.info('installId', 'generated');
+  return id;
+}
+ensureInstallId();
+
+// 统一的 AI 配置入口：有可用 Ollama 则本地；否则设置面板里的线上配置 / `.env`
 async function resolveAiConfig() {
   const localModel = store.get('localModel') || '';
   if (localModel) {
@@ -105,7 +152,47 @@ async function resolveAiConfig() {
     }
     logger.warn('resolveAiConfig', `local model "${localModel}" configured but Ollama unavailable, fallback to online`);
   }
-  return { ...onlineConfig, source: 'online' };
+  // 开发态（npm start）本机 .env 优先，避免旧 Key 盖住新配置；发布版设置面板优先
+  return { ...onlineConfig.resolve(store.get('aiConfig'), { preferEnv: !app.isPackaged }), source: 'online' };
+}
+
+// 发布版可能内置了 Key；用户自己的 Key 失效时自动回退，并明确告知
+let aiFallbackNotice = '';
+
+function builtinAiConfig() {
+  const bundled = typeof onlineConfig.loadBundled === 'function' ? onlineConfig.loadBundled() : null;
+  if (bundled && bundled.token) {
+    return { baseUrl: bundled.baseUrl, token: bundled.token, model: bundled.model, source: 'bundled' };
+  }
+  if (onlineConfig.token) {
+    return { baseUrl: onlineConfig.baseUrl, token: onlineConfig.token, model: onlineConfig.model, source: 'env' };
+  }
+  return null;
+}
+
+function isUserKeyActive() {
+  const saved = store.get('aiConfig') || {};
+  const merged = onlineConfig.resolve(saved, { preferEnv: !app.isPackaged });
+  return merged.tokenSource === 'user' && !!(saved.token || '').trim();
+}
+
+// 调用 AI：若使用用户的 Key 且鉴权失败，回退到内置 Key 重试一次
+async function withAiFallback(invoke) {
+  const cfg = await resolveAiConfig();
+  aiFallbackNotice = '';
+  try {
+    return { cfg, result: await invoke(cfg), usedFallback: false };
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    const authFailed = /AUTH_FAILED|HTTP_40[13]/.test(msg);
+    if (!authFailed || cfg.source !== 'online' || !isUserKeyActive()) throw e;
+    const builtin = builtinAiConfig();
+    if (!builtin) throw e;
+    logger.warn('ai.fallback', 'user key auth failed, retry with builtin key');
+    aiFallbackNotice = '你的 API Key 已失效，本次已临时使用应用内置 Key；请到设置更新。';
+    const result = await invoke({ ...builtin, source: 'online' });
+    return { cfg: builtin, result, usedFallback: true };
+  }
 }
 
 // 启动参数：--hidden 用于开机自启时不显示球
@@ -189,6 +276,11 @@ function _createBallWindowImpl() {
     if (!startHidden) ballWindow.show();
   });
 
+  // 形象变化后同步给渲染端（renderer 加载完成时也会主动 getPersona）
+  ballWindow.webContents.once('did-finish-load', () => {
+    broadcastPersona(store.get('persona') || 'cat');
+  });
+
   // close-to-tray
   ballWindow.on('close', (e) => {
     if (!isQuitting) {
@@ -200,6 +292,19 @@ function _createBallWindowImpl() {
 
 // 缓存最近的球的屏幕坐标（用于卡片定位）
 let lastBallScreenPos = { x: 0, y: 0 };
+// 最近的渲染端 transform 位置；update-ball-pos 是 60fps 通道，不刷日志，顺带节流落盘
+let lastPersistedPos = null;
+let positionSaveTimer = null;
+
+function persistBallPosition(x, y) {
+  const clamped = clampPosition({ x, y });
+  lastPersistedPos = clamped;
+  if (positionSaveTimer) return; // 已有待写入任务，只需更新 lastPersistedPos
+  positionSaveTimer = setTimeout(() => {
+    positionSaveTimer = null;
+    if (lastPersistedPos) store.set('position', lastPersistedPos);
+  }, 400);
+}
 
 // 球的实时屏幕坐标 = 窗口原点 + transform 偏移（不依赖上次抽签位置）
 // 返回整数（Electron setPosition / BrowserWindow 要求整数，浮点会 conversion failure）
@@ -212,8 +317,29 @@ function getBallScreenPos() {
 }
 
 // ---------- 运势精灵 ----------
+// 记录一次「看今日运势」：每天第一次时连续天数 +1，并通知渲染端
+function recordStreak() {
+  const todayKey = fortune.getTodayKey();
+  const result = streak.checkIn(store.get('streak'), todayKey);
+  if (!result.changed) return result;
+  store.set('streak', result.state);
+  logger.info('streak', `count=${result.streak} best=${result.state.best}`);
+  if (ballWindow && !ballWindow.isDestroyed()) {
+    try { ballWindow.webContents.send('streak-updated', { streak: result.streak, broke: result.broke }); } catch {}
+  }
+  rebuildTrayMenu();
+  return result;
+}
+
 function getSpirit() {
-  return store.get('fortuneSpirit') || spirit.defaultSpirit();
+  const s = store.get('fortuneSpirit') || spirit.defaultSpirit();
+  // 每周衰减（跨周 -1），并记录当前周
+  const weekKey = fortune.getIsoWeek(new Date());
+  let next = s;
+  try { next = spirit.applyWeeklyDecay(s, weekKey); } catch {}
+  // 注意：衰减只在读时改写一次；applyWeeklyDecay 用 boostWeekKey 去重
+  if (next !== s) store.set('fortuneSpirit', next);
+  return next;
 }
 function saveSpirit(s) {
   store.set('fortuneSpirit', s);
@@ -226,6 +352,10 @@ function getCurrentPosWuxing() {
   const work = screen.getPrimaryDisplay().workArea;
   const cx = (work.x || 0) + (work.width || 0) / 2;
   const cy = (work.y || 0) + (work.height || 0) / 2;
+  // 中央区域（屏幕中心 30% 宽高以内）→ 土（健康位）
+  const nearCenter = Math.abs(pos.x + BALL_SIZE / 2 - cx) < work.width * 0.15 &&
+                     Math.abs(pos.y + BALL_SIZE / 2 - cy) < work.height * 0.15;
+  if (nearCenter) return 'earth';
   const left = pos.x < cx, top = pos.y < cy;
   if (left && top) return 'water';
   if (!left && top) return 'wood';
@@ -248,6 +378,16 @@ function startSpiritAccum() {
       const after = dim ? (updated.boosts[dim] || 0) : 0;
       if (after > before) {
         logger.info('spirit.accum', `摆位积累：${dim} +1（${wuxing}方位）`, { dim, wuxing });
+        // 通知渲染端：猫身边气泡提示（让加持可见）
+        if (ballWindow && !ballWindow.isDestroyed()) {
+          try {
+            ballWindow.webContents.send('spirit-boosted', {
+              dim,
+              wuxing,
+              amount: after - before,
+            });
+          } catch {}
+        }
       }
       saveSpirit(updated);
     } catch (e) {
@@ -331,15 +471,23 @@ function _createCardWindowImpl(ballScreenX, ballScreenY) {
   });
 
   cardWindow.on('blur', () => {
-    // 失焦自动关闭（除非用户在交互中，由渲染器通过 _stayOpen 标记抑制）
-    if (!cardWindow._stayOpen) closeCardWindow();
+    // 失焦自动关闭（除非用户在交互中，或 AI 解读仍在写入）
+    if (!cardWindow._stayOpen && !cardWindow._aiPending) closeCardWindow();
   });
 
-  // 等 webContents 加载完后再发待发的 card-data
+  // 等 webContents 加载完后再发待发的 card-data（AI 解读同理，否则首次打开会丢）
   cardWindow.webContents.once('did-finish-load', () => {
     if (cardWindow._pendingCardData) {
       cardWindow.webContents.send('card-data', cardWindow._pendingCardData);
       cardWindow._pendingCardData = null;
+    }
+    if (cardWindow._pendingAi) {
+      cardWindow.webContents.send('ai-interpretation-ready', cardWindow._pendingAi);
+      cardWindow._pendingAi = null;
+    }
+    if (cardWindow._pendingAiStatus) {
+      cardWindow.webContents.send('ai-status', cardWindow._pendingAiStatus);
+      cardWindow._pendingAiStatus = null;
     }
   });
 
@@ -349,6 +497,8 @@ function _createCardWindowImpl(ballScreenX, ballScreenY) {
 // 把待发数据塞到 cardWindow 上，did-finish-load 后再 send
 function queueCardData(data) {
   const win = createCardWindow();
+  // 新一次抽签：作废上一张卡片还挂着的解读
+  win._pendingAi = null;
   if (win.webContents.isLoading()) {
     win._pendingCardData = data;
     logger.info('main.card', `queue pending style=${data.style}`);
@@ -380,7 +530,7 @@ function _createSettingsWindowImpl() {
   }
   settingsWindow = new BrowserWindow({
     width: 460,
-    height: 600,
+    height: 680,
     minWidth: 400,
     minHeight: 480,
     transparent: false,
@@ -392,7 +542,7 @@ function _createSettingsWindowImpl() {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: false,
-    backgroundColor: '#1a1d24',
+    backgroundColor: '#141019', // 与 tokens.css 的 --bg-0 保持一致
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -457,20 +607,29 @@ function _createAiInputWindowImpl() {
 // 浮窗定位：贴在球的右上角偏移
 function positionAiInputNearBall() {
   if (!aiInputWindow || aiInputWindow.isDestroyed()) return;
-  const bounds = ballWindow.getBounds();
+  const pos = getBallScreenPos();
   const work = screen.getPrimaryDisplay().workArea;
   const w = AI_INPUT_WIDTH, h = AI_INPUT_HEIGHT;
   // 默认放在球右上
-  let x = bounds.x + currentBallPos.x + BALL_SIZE + 8;
-  let y = bounds.y + currentBallPos.y - 20;
+  let x = pos.x + BALL_SIZE + 8;
+  let y = pos.y - 20;
   // 右边越界 → 放球左侧
-  if (x + w > work.x + work.width) x = bounds.x + currentBallPos.x - w - 8;
+  if (x + w > work.x + work.width) x = pos.x - w - 8;
   // 左边越界 → clamp
   if (x < work.x) x = work.x + 8;
   // 下边越界 → 上移
   if (y + h > work.y + work.height) y = work.y + work.height - h - 8;
   if (y < work.y) y = work.y + 8;
   aiInputWindow.setPosition(Math.round(x), Math.round(y));
+}
+
+// 打开 AI 对话浮窗（托盘 / 右键 / 设置面板共用这一条路径）
+function openAiInputWindow() {
+  const win = createAiInputWindow();
+  positionAiInputNearBall();
+  win.show();
+  win.focus();
+  sendAiInputFocus(win);
 }
 
 // ---------- 精灵面板 ----------
@@ -536,6 +695,19 @@ function positionPetPanelNearBall() {
   petPanelWindow.setPosition(Math.round(x), Math.round(y));
 }
 
+// ---------- 桌面形象 ----------
+const PERSONAS = {
+  cat: '猫',
+  dog: '狗',
+  caishen: '财神',
+  lots: '签筒',
+};
+function broadcastPersona(name) {
+  if (ballWindow && !ballWindow.isDestroyed()) {
+    try { ballWindow.webContents.send('persona-changed', name); } catch {}
+  }
+}
+
 // ---------- 托盘 ----------
 function createTray() {
   // 占位图标：1x1 透明（用户后续可替换为真实 ICO）
@@ -557,7 +729,8 @@ function createTray() {
     return;
   }
 
-  tray.setToolTip('今日运势');
+  const st = store.get('streak') || { count: 0 };
+  tray.setToolTip(st.count > 1 ? `今日运势 · 连续 ${st.count} 天` : '今日运势');
   rebuildTrayMenu();
 }
 
@@ -604,14 +777,11 @@ function rebuildTrayMenu() {
     {
       label: 'AI 运势解读...',
       click: () => {
+        // 走 IPC 同一条路径：窗口尚未加载完时也能在加载后补发历史
         if (!ballWindow || ballWindow.isDestroyed()) createBallWindow();
         ballWindow.show();
         ballWindow.focus();
-        const win = createAiInputWindow();
-        positionAiInputNearBall();
-        win.show();
-        win.focus();
-        sendAiInputFocus(win);
+        openAiInputWindow();
       },
     },
     { type: 'separator' },
@@ -639,6 +809,50 @@ function rebuildTrayMenu() {
         store.set('autoStart', item.checked);
         applyAutoStart(item.checked);
       },
+    },
+    {
+      label: '桌面形象',
+      submenu: Object.entries(PERSONAS).map(([key, label]) => ({
+        label,
+        type: 'radio',
+        checked: (store.get('persona') || 'cat') === key,
+        click: () => {
+          store.set('persona', key);
+          logger.info('persona', 'tray set ' + key);
+          broadcastPersona(key);
+          rebuildTrayMenu();
+        },
+      })),
+    },
+    {
+      label: '每日提醒',
+      submenu: [
+        {
+          label: '开启每日一签提醒',
+          type: 'checkbox',
+          checked: (store.get('dailyReminder') || {}).enabled === true,
+          click: (item) => {
+            const cfg = store.get('dailyReminder') || {};
+            store.set('dailyReminder', { ...cfg, enabled: item.checked });
+            rebuildTrayMenu();
+            scheduleDailyReminder();
+            logger.info('reminder', 'enabled=' + item.checked);
+          },
+        },
+        { type: 'separator' },
+        ...['08:00', '09:00', '12:00', '18:00', '21:00'].map((time) => ({
+          label: time,
+          type: 'radio',
+          checked: ((store.get('dailyReminder') || {}).time || '09:00') === time,
+          click: () => {
+            const cfg = store.get('dailyReminder') || {};
+            store.set('dailyReminder', { ...cfg, time, enabled: true });
+            rebuildTrayMenu();
+            scheduleDailyReminder();
+            logger.info('reminder', 'time=' + time);
+          },
+        })),
+      ],
     },
     {
       label: '重置位置',
@@ -672,8 +886,16 @@ function rebuildTrayMenu() {
     },
     {
       label: '清空日志',
-      click: () => {
-        if (confirm('确定清空所有日志？')) {
+      click: async () => {
+        const { response } = await dialog.showMessageBox({
+          type: 'question',
+          buttons: ['取消', '清空'],
+          defaultId: 0,
+          cancelId: 0,
+          title: '清空日志',
+          message: '确定清空所有日志？',
+        });
+        if (response === 1) {
           logger.clearAll();
           logger.info('main', 'logs cleared');
         }
@@ -694,10 +916,9 @@ function rebuildTrayMenu() {
 function applyAutoStart(enabled) {
   if (!app.isPackaged) return; // dev 模式不写注册表
   try {
-    app.setLoginItemSettings({
-      openAtLogin: !!enabled,
-      args: ['--hidden'],
-    });
+    // 注意：不要传 args。打包后 setLoginItemSettings 默认指向应用 exe，
+    // 传 ['--hidden'] 会在部分 Windows 版本上变成 "electron.exe --hidden" 而无法启动。
+    app.setLoginItemSettings({ openAtLogin: !!enabled });
   } catch (e) {
     console.error('setLoginItemSettings 失败:', e.message);
     logger.warn('autoStart', `setLoginItemSettings failed: ${e.message}`);
@@ -763,15 +984,24 @@ function registerIpc() {
   handle('save-position', (_e, x, y) => {
     if (typeof x !== 'number' || typeof y !== 'number') return null;
     const clamped = clampPosition({ x, y });
+    lastPersistedPos = clamped;
+    if (positionSaveTimer) { clearTimeout(positionSaveTimer); positionSaveTimer = null; }
     store.set('position', clamped);
     return clamped;
   });
 
   // renderer 同步球的当前 transform 位置给主进程（用于 ignore-mouse 决策）
-  handle('update-ball-pos', (_e, x, y) => {
+  // 注意：这是 60fps 高频通道，不能走 logIpcStart，否则日志会被刷爆
+  ipcMain.handle('update-ball-pos', (_e, x, y) => {
     if (typeof x === 'number' && typeof y === 'number') {
       // 取整，避免浮点坐标传给 Electron 原生方法（setPosition/BrowserWindow）导致 conversion failure
       currentBallPos = { x: Math.round(x), y: Math.round(y) };
+      // 拖动结束/关闭时渲染端可能来不及发 save-position，这里兜底落盘
+      if (!lastPersistedPos ||
+          lastPersistedPos.x !== currentBallPos.x ||
+          lastPersistedPos.y !== currentBallPos.y) {
+        persistBallPosition(currentBallPos.x, currentBallPos.y);
+      }
     }
     return true;
   });
@@ -798,6 +1028,23 @@ function registerIpc() {
   });
 
   // OS 层鼠标穿透切换：renderer 根据光标位置动态调用
+  // 渲染端打开/关闭菜单时上报外接矩形，扩大/恢复鼠标热区
+  ipcMain.on('set-hit-region', (_e, rect) => {
+    try {
+      if (rect && [rect.x, rect.y, rect.w, rect.h].every((n) => typeof n === 'number' && isFinite(n))) {
+        ballHitRegion = { x: rect.x, y: rect.y, w: Math.max(1, rect.w), h: Math.max(1, rect.h) };
+        lastIgnoreState = null; // 强制下一轮重新判定
+        logger.info('main.hitRegion', 'enabled ' + JSON.stringify(ballHitRegion));
+      } else {
+        ballHitRegion = null;
+        lastIgnoreState = null;
+        logger.info('main.hitRegion', 'disabled');
+      }
+    } catch (e) {
+      logger.warn('main.hitRegion', 'bad rect: ' + e.message);
+    }
+  });
+
   handle('set-ignore-mouse', (_e, ignore) => {
     if (!ballWindow || ballWindow.isDestroyed()) return false;
     ballWindow.setIgnoreMouseEvents(!!ignore, { forward: true });
@@ -806,7 +1053,7 @@ function registerIpc() {
 
   // ---------- 运势 ----------
   handle('draw-fortune', (_e, options = {}) => {
-    const { deferCard = false, scope = 'today' } = options;
+    const { deferCard = false, scope = 'today', force = false } = options;
     const todayKey = fortune.getTodayKey();
     const cached = store.get('todayFortune') || {};
     // 应用运势精灵加持（五项维度加分）
@@ -823,8 +1070,7 @@ function registerIpc() {
           for (const field of fields) {
             if (field === 'score') continue; // 综合单独处理
             if (data.dims && typeof data.dims[field] === 'number') {
-              const max = field === '感情' || field === '爱情' ? 5 : (data.dims[field] > 100 ? 100 : 5);
-              const cap = field === '事业' || field === '财运' || field === '健康' || field === '感情' ? (data.dims[field] > 100 ? 100 : 5) : 5;
+              const cap = data.dims[field] > 100 ? 100 : 5;
               data.dims[field] = Math.min(cap, data.dims[field] + b);
             }
           }
@@ -846,8 +1092,20 @@ function registerIpc() {
       return data;
     };
 
-    const showCard = (style, score, data) => {
-      applyBoost(data);
+    // 给卡片数据附带精灵加持后的副本；缓存里的原始数据不动，否则每次打开都会重复加分
+    const withBoost = (style, score, data) => {
+      try {
+        return applyBoost(JSON.parse(JSON.stringify(data || {})));
+      } catch (e) {
+        logger.warn('spirit.boost', `clone failed: ${e.message}`);
+        return applyBoost(data);
+      }
+    };
+
+    // AI 解读在这里同步发起（早于 showCard 的异步 IPC），
+    // 确保返回前渲染端已经有 card-data，不会出现「解读先到、卡片后渲染」被清掉的竞态。
+    // 注意：传进来的 data 已由 withBoost 生成副本，这里不要再 applyBoost，否则会重复加分。
+    const showCard = (style, score, data, aiVariant = 'cached') => {
       if (deferCard) return;
       const pos = getBallScreenPos();
       const win = createCardWindow(pos.x, pos.y);
@@ -857,8 +1115,7 @@ function registerIpc() {
       win.show();
       win.focus();
       setTimeout(() => { if (win && !win.isDestroyed()) win._stayOpen = false; }, 500);
-      // 异步追加 AI 解读（不阻塞主流程）
-      tryAppendAiInterpretation(style, score, data, todayKey);
+      tryAppendAiInterpretation(style, score, data, todayKey, aiVariant);
     };
 
     // ===== scope=moment: 此刻（按时辰缓存 2 小时）=====
@@ -870,10 +1127,11 @@ function registerIpc() {
       if (momentCache[cacheKey]) {
         const entry = momentCache[cacheKey];
         logger.info('main.drawFortune', `scope=moment cached hour=${hourKey}`);
-        showCard('moment', entry.score, entry.data);
-        return { style: 'moment', score: entry.score, fortune: entry.data, cached: true };
+        const view = withBoost('moment', entry.score, entry.data);
+        showCard('moment', view.score, view, 'cached');
+        return { style: 'moment', score: view.score, fortune: view, cached: true };
       }
-      const data = fortune.genHourFortune({ dateKey: todayKey, hourKey, profile: store.get('profile') });
+      const data = fortune.genHourFortune({ dateKey: todayKey, hourKey, profile: store.get('profile'), installId: store.get('installId') });
       momentCache[cacheKey] = { score: data.score, data, ts: Date.now() };
       // 清理 7 天前的
       const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
@@ -881,8 +1139,9 @@ function registerIpc() {
         if (momentCache[k].ts < cutoff) delete momentCache[k];
       }
       store.set('momentCache', momentCache);
-      showCard('moment', data.score, data);
-      return { style: 'moment', score: data.score, fortune: data, cached: false };
+      const view = withBoost('moment', data.score, data);
+      showCard('moment', view.score, view, 'fresh');
+      return { style: 'moment', score: view.score, fortune: view, cached: false };
     }
 
     // ===== scope=tomorrow: 明日（按明日 dateKey 缓存）=====
@@ -894,18 +1153,20 @@ function registerIpc() {
       if (tomorrowCache[tomorrowKey]) {
         const entry = tomorrowCache[tomorrowKey];
         logger.info('main.drawFortune', `scope=tomorrow cached`);
-        showCard('tomorrow', entry.score, entry.data);
-        return { style: 'tomorrow', score: entry.score, fortune: entry.data, cached: true };
+        const view = withBoost('tomorrow', entry.score, entry.data);
+        showCard('tomorrow', view.score, view, 'cached');
+        return { style: 'tomorrow', score: view.score, fortune: view, cached: true };
       }
-      const data = fortune.genTomorrowFortune({ dateKey: tomorrowKey });
+      const data = fortune.genTomorrowFortune({ dateKey: tomorrowKey, installId: store.get('installId') });
       tomorrowCache[tomorrowKey] = { score: data.score, data, ts: Date.now() };
       const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
       for (const k of Object.keys(tomorrowCache)) {
         if (tomorrowCache[k].ts < cutoff) delete tomorrowCache[k];
       }
       store.set('tomorrowCache', tomorrowCache);
-      showCard('tomorrow', data.score, data);
-      return { style: 'tomorrow', score: data.score, fortune: data, cached: false };
+      const view = withBoost('tomorrow', data.score, data);
+      showCard('tomorrow', view.score, view, 'fresh');
+      return { style: 'tomorrow', score: view.score, fortune: view, cached: false };
     }
 
     // ===== scope=week: 本周（按 ISO 周缓存）=====
@@ -916,18 +1177,20 @@ function registerIpc() {
       if (weekCache[isoWeek]) {
         const entry = weekCache[isoWeek];
         logger.info('main.drawFortune', `scope=week cached`);
-        showCard('week', entry.score, entry.data);
-        return { style: 'week', score: entry.score, fortune: entry.data, cached: true };
+        const view = withBoost('week', entry.score, entry.data);
+        showCard('week', view.score, view, 'cached');
+        return { style: 'week', score: view.score, fortune: view, cached: true };
       }
-      const data = fortune.genWeekFortune({ dateKey: todayKey });
+      const data = fortune.genWeekFortune({ dateKey: todayKey, installId: store.get('installId') });
       weekCache[isoWeek] = { score: data.score, data, ts: Date.now() };
       const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
       for (const k of Object.keys(weekCache)) {
         if (weekCache[k].ts < cutoff) delete weekCache[k];
       }
       store.set('weekCache', weekCache);
-      showCard('week', data.score, data);
-      return { style: 'week', score: data.score, fortune: data, cached: false };
+      const view = withBoost('week', data.score, data);
+      showCard('week', view.score, view, 'fresh');
+      return { style: 'week', score: view.score, fortune: view, cached: false };
     }
 
     // ===== scope=profile: 个人测算 =====
@@ -939,13 +1202,15 @@ function registerIpc() {
         // 未填生日 → 返回引导（前端渲染错误态）
         return { style: 'profile', score: 0, fortune: { error: 'NO_BIRTHDAY' }, cached: false };
       }
-      const cacheKey = `profile|${profile.birthday}|${profileMode}`;
+      // 个人运势按「生日 + 形态 + 当天」缓存；旧 key 没带日期，跨天后会一直返回昨天的结果
+      const cacheKey = `profile|${profile.birthday}|${profileMode}|${todayKey}`;
       const profileCache = store.get('profileCache') || {};
       if (profileCache[cacheKey]) {
         const entry = profileCache[cacheKey];
         logger.info('main.drawFortune', 'scope=profile cached');
-        showCard('profile', entry.score, entry.data);
-        return { style: 'profile', score: entry.score, fortune: entry.data, cached: true };
+        const view = withBoost('profile', entry.score, entry.data);
+        showCard('profile', view.score, view);
+        return { style: 'profile', score: view.score, fortune: view, cached: true };
       }
       const data = fortune.genProfile({ dateKey: todayKey, profile, profileMode });
       profileCache[cacheKey] = { score: data.score, data, ts: Date.now() };
@@ -954,11 +1219,49 @@ function registerIpc() {
         if (profileCache[k].ts < cutoff) delete profileCache[k];
       }
       store.set('profileCache', profileCache);
-      showCard('profile', data.score, data);
-      return { style: 'profile', score: data.score, fortune: data, cached: false };
+      const view = withBoost('profile', data.score, data);
+      showCard('profile', view.score, view);
+      return { style: 'profile', score: view.score, fortune: view, cached: false };
     }
 
     // ===== scope=today（默认）: 沿用第一/二阶段逻辑 =====
+    // 换一换（force）：跳过当天缓存，换一种风格重新生成，并覆盖当天的缓存
+    if (force) {
+      const prevStyle = cached[todayKey] && cached[todayKey].style;
+      // 临时把上一风格的行为分压低，确保换到不同风格
+      const bmap = store.get('behavior') || {};
+      if (prevStyle) {
+        const cur = bmap[prevStyle] || { clicks: 0, view_seconds: 0, last_seen: 0 };
+        cur.last_seen = 0;
+        bmap[prevStyle] = cur;
+      }
+      const style = behavior.pickStyle(bmap);
+      logger.info('main.drawFortune', `scope=today force from=${prevStyle || 'none'} to=${style}`);
+      const totalClicks = behavior.STYLES.reduce(
+        (sum, st) => sum + ((bmap[st] && bmap[st].clicks) || 0), 0
+      );
+      const ranked = behavior.STYLES.map(st => ({
+        s: st,
+        v: ((bmap[st] && bmap[st].clicks) || 0) * 1 +
+           ((bmap[st] && bmap[st].view_seconds) || 0) * 0.01,
+      })).sort((a, b) => b.v - a.v).slice(0, 2).map(x => x.s);
+      const data = fortune.generate(style, {
+        dateKey: todayKey,
+        zodiac: store.get('zodiac'),
+        totalClicks,
+        topStyles: ranked,
+        installId: store.get('installId'),
+      });
+      data.almanac = fortune.genAlmanac({ dateKey: todayKey });
+      data.styleLabel = '今日黄历';
+      cached[todayKey] = { style, score: data.score, data };
+      store.set('todayFortune', cached);
+      behavior.recordInteraction(bmap, style, 0);
+      store.set('behavior', bmap);
+      const view = withBoost(style, data.score, data);
+      showCard(style, view.score, view, 'fresh');
+      return { style, score: view.score, fortune: view, cached: false, rerolled: true };
+    }
     // 当日已有缓存 → 直接返回 + 记录行为
     if (cached[todayKey]) {
       const entry = cached[todayKey];
@@ -966,8 +1269,10 @@ function registerIpc() {
       behavior.recordInteraction(behaviorMap, entry.style, 0);
       store.set('behavior', behaviorMap);
       logger.info('main.drawFortune', `scope=today cached style=${entry.style}`);
-      showCard(entry.style, entry.score, entry.data);
-      return { style: entry.style, score: entry.score, fortune: entry.data, cached: true };
+      recordStreak();
+      const view = withBoost(entry.style, entry.score, entry.data);
+      showCard(entry.style, view.score, view, 'cached');
+      return { style: entry.style, score: view.score, fortune: view, cached: true };
     }
     // 选风格
     const behaviorMap = store.get('behavior') || {};
@@ -989,6 +1294,7 @@ function registerIpc() {
       zodiac: store.get('zodiac'),
       totalClicks,
       topStyles: ranked,
+      installId: store.get('installId'),
     });
     // 叠加今日黄历 + 改标题
     data.almanac = fortune.genAlmanac({ dateKey: todayKey });
@@ -1004,20 +1310,25 @@ function registerIpc() {
     // 记录行为（仅 today scope）
     behavior.recordInteraction(behaviorMap, style, 0);
     store.set('behavior', behaviorMap);
-    showCard(style, data.score, data);
-    return { style, score: data.score, fortune: data, cached: false };
+    const view = withBoost(style, data.score, data);
+    recordStreak();
+    showCard(style, view.score, view);
+    return { style, score: view.score, fortune: view, cached: false };
   });
 
-  // 单独控制卡片显示（用于动画结束后）
-  handle('show-fortune-card', (_e, style, score, fortuneData, ballX, ballY) => {
+  // 单独控制卡片显示（球的真实抽签路径：先 deferCard 拿数据，再弹卡）
+  handle('show-fortune-card', (_e, style, score, fortuneData, ballX, ballY, reveal = false) => {
     if (typeof style !== 'string') return false;
     const win = createCardWindow(ballX, ballY);
     win._stayOpen = true;
+    win._aiPending = false; // 新卡片：清掉上一张遗留的 AI 写入保护
     cardCurrentStyle = style;
-    queueCardData({ style, score, fortune: fortuneData });
+    queueCardData({ style, score, fortune: fortuneData, reveal: !!reveal });
     win.show();
     win.focus();
     setTimeout(() => { if (win && !win.isDestroyed()) win._stayOpen = false; }, 500);
+    // 这条路径 draw-fortune 用了 deferCard，不会自动带 AI 解读，这里补上
+    tryAppendAiInterpretation(style, score, fortuneData, fortune.getTodayKey(), 'cached');
     return true;
   });
 
@@ -1031,6 +1342,7 @@ function registerIpc() {
 
   // card-opened：仅记录打开时间（关闭由 closeCardWindow 统一处理）
   handle('card-opened', () => {
+    // 每次打开都重新计时，否则新卡片会沿用上一张的打开时间
     cardOpenedAt = Date.now();
     return true;
   });
@@ -1041,12 +1353,62 @@ function registerIpc() {
     return true;
   });
 
-  // ---------- 模型管理（线上硬编码 + 本地可切换/下载）----------
+  // ---------- 模型管理（设置面板填写优先，空白回退 .env）----------
 
-  // 返回当前生效的模型来源（只读状态，供设置面板展示）
   handle('get-llm-status', async () => {
     const cfg = await resolveAiConfig();
-    return { source: cfg.source, model: cfg.model, baseUrl: cfg.baseUrl };
+    return {
+      source: cfg.source,
+      model: cfg.model,
+      baseUrl: cfg.baseUrl,
+      hasToken: !!cfg.token,
+    };
+  });
+
+  handle('get-online-ai-config', () => {
+    const saved = store.get('aiConfig') || {};
+    const merged = onlineConfig.resolve(saved, { preferEnv: !app.isPackaged });
+    const hasUserToken = !!(saved.token && String(saved.token).trim()) && merged.tokenSource === 'user';
+    return {
+      baseUrl: saved.baseUrl || merged.baseUrl || '',
+      model: saved.model || merged.model || '',
+      hasToken: !!merged.token,
+      tokenHint: onlineConfig.maskToken(merged.token),
+      fromEnv: merged.tokenSource === 'env',
+      fromBundled: merged.tokenSource === 'bundled',
+      tokenSource: merged.tokenSource || 'none',
+    };
+  });
+
+  handle('save-online-ai-config', (_e, payload = {}) => {
+    const prev = store.get('aiConfig') || {};
+    const nextToken = typeof payload.token === 'string' ? payload.token.trim() : '';
+    const next = {
+      baseUrl: typeof payload.baseUrl === 'string' ? payload.baseUrl.trim() : (prev.baseUrl || ''),
+      model: typeof payload.model === 'string' ? payload.model.trim() : (prev.model || ''),
+      token: nextToken || prev.token || '',
+    };
+    store.set('aiConfig', next);
+    logger.info('aiConfig', `saved model=${next.model} baseUrl=${next.baseUrl} hasToken=${!!next.token}`);
+    return {
+      ok: true,
+      tokenHint: onlineConfig.maskToken(onlineConfig.resolve(next, { preferEnv: !app.isPackaged }).token),
+      tokenSource: onlineConfig.resolve(next, { preferEnv: !app.isPackaged }).tokenSource,
+    };
+  });
+
+  // 清除设置面板里保存的 Key，回退到 .env（如果 .env 里也有）
+  handle('clear-online-ai-token', () => {
+    const prev = store.get('aiConfig') || {};
+    store.set('aiConfig', { baseUrl: prev.baseUrl || '', model: prev.model || '', token: '' });
+    logger.info('aiConfig', 'saved token cleared');
+    const merged = onlineConfig.resolve(store.get('aiConfig'));
+    return { ok: true, hasToken: !!merged.token, fromEnv: !merged.token || !!onlineConfig.token };
+  });
+
+  handle('test-online-ai', async () => {
+    const cfg = await resolveAiConfig();
+    return ai.testConnection({ baseUrl: cfg.baseUrl, token: cfg.token, model: cfg.model });
   });
 
   // 列出 Ollama 已装模型
@@ -1127,18 +1489,47 @@ function registerIpc() {
     return { ok: true, dim, boost: result.boost, remaining: result.remaining, boosts: result.spirit.boosts };
   });
 
+  handle('get-streak', () => {
+    const st = store.get('streak') || streak.defaultStreak();
+    return { count: st.count || 0, best: st.best || 0, lastDate: st.lastDate || '' };
+  });
+
+  handle('get-persona', () => (PERSONAS[store.get('persona')] ? store.get('persona') : 'cat'));
+
+  handle('set-persona', (_e, name) => {
+    const next = PERSONAS[name] ? name : 'cat';
+    store.set('persona', next);
+    logger.info('persona', 'set to ' + next);
+    broadcastPersona(next);
+    rebuildTrayMenu();
+    return next;
+  });
+
   handle('open-settings', () => {
     createSettingsWindow();
     return true;
   });
 
+  // 设置面板的「预览动画」：在球上触发一次带全屏动画的今日抽签
+  handle('preview-ball-anim', () => {
+    if (!ballWindow || ballWindow.isDestroyed()) createBallWindow();
+    ballWindow.show();
+    ballWindow.focus();
+    // 等球窗口加载完成再发，避免首次预览时事件丢失
+    if (ballWindow.webContents.isLoading()) {
+      ballWindow.webContents.once('did-finish-load', () => {
+        ballWindow.webContents.send('shortcut-draw', { scope: 'today', animate: true });
+      });
+    } else {
+      ballWindow.webContents.send('shortcut-draw', { scope: 'today', animate: true });
+    }
+    logger.info('main.anim', 'preview requested');
+    return true;
+  });
+
   // ---------- AI 浮窗 ----------
   handle('open-ai-input', () => {
-    const win = createAiInputWindow();
-    positionAiInputNearBall();
-    win.show();
-    win.focus();
-    sendAiInputFocus(win);
+    openAiInputWindow();
     return true;
   });
 
@@ -1177,12 +1568,12 @@ function registerIpc() {
           profile,
           profileMode,
         });
-        const result = await ai.interpretFortune({
+        const { result } = await withAiFallback((cfg) => ai.interpretFortune({
           style: 'profile',
           fortuneData: data,
           ctx: { dateKey: fortune.getTodayKey(), zodiac: store.get('zodiac') },
-          aiConfig: aiCfg,
-        });
+          aiConfig: cfg,
+        }));
         logger.info('ai.profileDecode', `tokens=${result.usage.total_tokens || '?'}`);
         return { ok: true, text: result.text };
       } catch (e) {
@@ -1217,6 +1608,7 @@ function registerIpc() {
       zodiac: store.get('zodiac'),
       posWuxing: getCurrentPosWuxing(),
       scene: agentScene,
+      installId: store.get('installId'),
     };
 
     const sendProgress = (info) => {
@@ -1226,19 +1618,25 @@ function registerIpc() {
     };
 
     try {
-      const result = await agent.runAgent({
+      const { result, usedFallback } = await withAiFallback((cfg) => agent.runAgent({
         history: agentHistory,
         userQuery: query,
-        aiConfig: aiCfg,
+        aiConfig: cfg,
         ctx,
         callLLM: ai.callLLM,
         onProgress: sendProgress,
-      });
+      }));
       agentHistory = result.history || [];
       agentScene = result.scene || '';
       saveAgentChat();
-      logger.info('agent.chat', `scene=${agentScene || 'none'} tools=${(result.toolsUsed || []).join(',') || 'none'} tokens=${result.usage.total_tokens || '?'}`);
-      return { ok: true, text: result.text, toolsUsed: result.toolsUsed || [] };
+      logger.info('agent.chat', `scene=${agentScene || 'none'} tools=${(result.toolsUsed || []).join(',') || 'none'} tokens=${result.usage.total_tokens || '?'} fallback=${usedFallback}`);
+      return {
+        ok: true,
+        text: result.text,
+        toolsUsed: result.toolsUsed || [],
+        citations: result.citations || [],
+        notice: usedFallback ? aiFallbackNotice : '',
+      };
     } catch (e) {
       const msg = String(e.message || e);
       logger.error('agent.chat', msg, { query: query.slice(0, 50) });
@@ -1321,66 +1719,130 @@ function showAiCardOnly(userQuery, aiText) {
 }
 
 // ---------- 当次抽签后异步追加 AI 解读到卡片 ----------
-async function tryAppendAiInterpretation(style, score, fortuneData, dateKey) {
+// aiVariant：cached / fresh。云端缓存按（日期 + 风格 + 加持后结果）存，
+// 否则祈福或摆位改变了结果，AI 还在按昨天的旧分数解读。
+// 本地 Ollama 不缓存：用户换成本地模型后不应看到之前的线上解读。
+async function tryAppendAiInterpretation(style, score, fortuneData, dateKey, aiVariant = 'cached') {
   const aiCfg = await resolveAiConfig();
-  if (!aiCfg.token) return; // 没 token 直接静默退出
+  // 没配置 Key：在卡片上显示提示（可点击去设置），而不是静默
+  if (!aiCfg.token) {
+    sendAiStatusToCard(style, 'NO_TOKEN', 'AI 解读未配置，点此去设置');
+    return;
+  }
 
-  // 缓存命中（同一天同风格）→ 直接发
+  // 只解读用户能看到的五种风格（moment/profile 等没有专用 prompt）
+  const PROMPTED_STYLES = ['traditional', 'modern', 'lots', 'tarot', 'personalized'];
+  if (!PROMPTED_STYLES.includes(style)) {
+    logger.info('ai.interpretFortune', `skip style=${style} (no prompt)`);
+    return;
+  }
+  markAiPending(style, true);
+
+  // 缓存命中 → 直接发；写回前校验卡片是否还是同一张
   const aiCache = store.get('aiCache') || {};
-  const cached = aiCache[dateKey] && aiCache[dateKey][style];
+  const entry = aiCache[dateKey] && aiCache[dateKey][style];
+  const cacheKey = aiVariant === 'cached' ? String(score) : '';
+  const cached = cacheKey && entry && entry.byKey && entry.byKey[cacheKey]
+    ? entry.byKey[cacheKey]
+    : null;
   if (cached && cached.text) {
-    if (cardWindow && !cardWindow.isDestroyed()) {
-      cardWindow.webContents.send('ai-interpretation-ready', {
-        text: cached.text,
-        usage: cached.usage,
-      });
-    }
+    markAiPending(style, false);
+    sendAiInterpretationToCard(style, cached.text, cached.usage, 'cache');
     return;
   }
 
   try {
-    const result = await ai.interpretFortune({
+    const { result } = await withAiFallback((cfg) => ai.interpretFortune({
       style,
       fortuneData,
       ctx: {
         dateKey,
         zodiac: store.get('zodiac'),
       },
-      aiConfig: aiCfg,
-    });
-    // 写缓存
-    if (!aiCache[dateKey]) aiCache[dateKey] = {};
-    aiCache[dateKey][style] = {
-      text: result.text,
-      usage: result.usage,
-      ts: Date.now(),
-    };
-    // 清理 7 天前
-    const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
-    for (const d of Object.keys(aiCache)) {
-      const dayEntries = aiCache[d];
-      let allOld = true;
-      for (const s of Object.keys(dayEntries)) {
-        if (dayEntries[s].ts < cutoff) delete dayEntries[s];
-        else allOld = false;
-      }
-      if (allOld || Object.keys(dayEntries).length === 0) delete aiCache[d];
-    }
-    store.set('aiCache', aiCache);
-    // 推送给当前打开的卡片
-    if (cardWindow && !cardWindow.isDestroyed()) {
-      cardWindow.webContents.send('ai-interpretation-ready', {
+      aiConfig: cfg,
+    }));
+    // 写缓存（仅云端；本地模型不缓存）
+    if (aiVariant === 'cached' && aiCfg.source === 'online') {
+      if (!aiCache[dateKey] || typeof aiCache[dateKey] !== 'object') aiCache[dateKey] = {};
+      const dayEntry = aiCache[dateKey][style] && aiCache[dateKey][style].byKey
+        ? aiCache[dateKey][style]
+        : { byKey: {} };
+      dayEntry.byKey[cacheKey] = {
         text: result.text,
         usage: result.usage,
-      });
+        ts: Date.now(),
+      };
+      aiCache[dateKey][style] = dayEntry;
+      // 清理 7 天前
+      const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+      for (const d of Object.keys(aiCache)) {
+        const dayEntries = aiCache[d];
+        let allOld = true;
+        for (const s of Object.keys(dayEntries)) {
+          const keys = (dayEntries[s] && dayEntries[s].byKey) || {};
+          for (const k of Object.keys(keys)) {
+            if (keys[k].ts < cutoff) delete keys[k];
+            else allOld = false;
+          }
+          if (Object.keys(keys).length === 0) delete dayEntries[s];
+        }
+        if (allOld || Object.keys(dayEntries).length === 0) delete aiCache[d];
+      }
+      store.set('aiCache', aiCache);
     }
+    sendAiInterpretationToCard(style, result.text, result.usage, 'live');
     console.log(`[AI] ${style} interpreted, tokens=${result.usage.total_tokens || '?'}`);
-    logger.info('ai.interpretFortune', `${style} tokens=${result.usage.total_tokens || '?'}`);
+    logger.info('ai.interpretFortune', `${style} tokens=${result.usage.total_tokens || '?'} source=${aiCfg.source}`);
   } catch (e) {
     console.warn(`[AI] skip interpretation for ${style}:`, e.message);
     logger.warn('ai.interpretFortune', `skip ${style}: ${e.message}`);
-    // 失败静默降级：卡片不显示 AI 区
+    // 失败降级：内置内容照常显示，卡片上给一条可点击的提示
+    const friendly = String(e.message || '').startsWith('AUTH_FAILED')
+      ? 'AI Key 已失效，点此去设置更新'
+      : 'AI 解读暂时不可用，点此查看设置';
+    sendAiStatusToCard(style, 'AI_FAILED', friendly);
+  } finally {
+    markAiPending(style, false);
   }
+}
+
+// AI 写入期间给卡片挂 pending 标记，避免失焦被关掉
+function markAiPending(style, pending) {
+  if (!cardWindow || cardWindow.isDestroyed()) return;
+  if (cardCurrentStyle && cardCurrentStyle !== style) return;
+  cardWindow._aiPending = !!pending;
+}
+
+// 把「AI 状态」作为一条系统气泡推给卡片（无 Key / 认证失败）
+function sendAiStatusToCard(style, kind, text) {
+  if (!cardWindow || cardWindow.isDestroyed()) return;
+  if (cardCurrentStyle && cardCurrentStyle !== style) return;
+  if (cardWindow.webContents.isLoading()) {
+    cardWindow._pendingAiStatus = { style, kind, text };
+    return;
+  }
+  cardWindow.webContents.send('ai-status', { style, kind, text });
+}
+
+// 把解读推给当前打开的卡片；卡片已换成别的风格时丢弃
+function sendAiInterpretationToCard(style, text, usage, via) {
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    logger.info('ai.push', `skip (no card) style=${style} via=${via}`);
+    return;
+  }
+  if (cardCurrentStyle && cardCurrentStyle !== style) {
+    logger.info('ai.push', `skip style=${style} (card now ${cardCurrentStyle})`);
+    return;
+  }
+  const payload = { style, text, usage };
+  if (cardWindow.webContents.isLoading()) {
+    // 首次打开卡片：渲染端脚本/监听器还没就绪，直接 send 会丢；等 did-finish-load 再补发
+    cardWindow._pendingAi = payload;
+    logger.info('ai.push', `queued style=${style} via=${via}`);
+    return;
+  }
+  cardWindow.webContents.send('ai-interpretation-ready', payload);
+  logger.info('ai.push', `sent style=${style} via=${via}`);
 }
 
 // 模块级变量：卡片状态
@@ -1417,13 +1879,18 @@ function closeCardWindow() {
 // ---------- 全局快捷键 ----------
 function registerShortcut() {
   try {
-    globalShortcut.register('CommandOrControl+Alt+F', () => {
+    const ok = globalShortcut.register('CommandOrControl+Alt+F', () => {
       if (!ballWindow || ballWindow.isDestroyed()) createBallWindow();
       ballWindow.show();
       ballWindow.focus();
       // 触发抽签：通过 webContents 发个事件给渲染端
       ballWindow.webContents.send('shortcut-draw');
     });
+    if (!ok) {
+      logger.warn('shortcut', 'Ctrl+Alt+F 已被其他应用占用，全局抽签快捷键不可用');
+    } else {
+      logger.info('shortcut', 'Ctrl+Alt+F registered');
+    }
   } catch (e) {
     console.error('globalShortcut 注册失败:', e.message);
     logger.warn('shortcut', `register failed: ${e.message}`);
@@ -1444,7 +1911,20 @@ app.whenReady().then(() => {
     version: app.getVersion(),
     platform: process.platform,
     electron: process.versions.electron,
+    packaged: app.isPackaged,
   });
+  // 启动诊断：确认 AI 配置来源（user / env / bundled / none），不记录 Key 本身
+  try {
+    const cfgNow = onlineConfig.resolve(store.get('aiConfig'), { preferEnv: !app.isPackaged });
+    logger.info('main.aiConfig', 'resolved', {
+      source: cfgNow.tokenSource,
+      hasToken: !!cfgNow.token,
+      model: cfgNow.model,
+      resourcesPath: process.resourcesPath || '',
+    });
+  } catch (e) {
+    logger.warn('main.aiConfig', 'resolve failed: ' + e.message);
+  }
   registerIpc();
   registerLogIpc();
   createBallWindow();
@@ -1454,12 +1934,14 @@ app.whenReady().then(() => {
   startCursorPolling();
   startWatcher();
   startSpiritAccum();
+  scheduleDailyReminder();
 
   // 启动 5 秒后跑一次自检（给窗口/托盘/快捷键留出初始化时间）
   setTimeout(() => {
     selfCheck.runSelfCheck({
       logWatcher,
       onlineConfig,
+      getOnlineToken: () => onlineConfig.resolve(store.get('aiConfig'), { preferEnv: !app.isPackaged }).token,
       localLLM,
       tray,
       ballWindow,
@@ -1483,8 +1965,11 @@ app.on('window-all-closed', (e) => {
 app.on('before-quit', () => {
   logger.info('main.lifecycle', 'before-quit');
   isQuitting = true;
-  // 落盘最终位置
-  if (ballWindow && !ballWindow.isDestroyed()) {
+  // 把待写入的位置立即落盘
+  if (positionSaveTimer) { clearTimeout(positionSaveTimer); positionSaveTimer = null; }
+  if (lastPersistedPos) {
+    store.set('position', lastPersistedPos);
+  } else if (ballWindow && !ballWindow.isDestroyed()) {
     const [x, y] = ballWindow.getPosition();
     store.set('position', clampPosition({ x, y }));
   }
@@ -1495,6 +1980,7 @@ app.on('will-quit', () => {
   try { globalShortcut.unregisterAll(); } catch {}
   if (cursorPollTimer) clearInterval(cursorPollTimer);
   if (spiritTimer) clearInterval(spiritTimer);
+  if (dailyReminderTimer) clearTimeout(dailyReminderTimer);
 });
 
 // ---------- 主进程轮询光标位置，独立决策 ignore-mouse ----------
@@ -1512,8 +1998,17 @@ function startCursorPolling() {
     const ballRight  = bounds.x + currentBallPos.x + BALL_SIZE + BALL_HALO;
     const ballTop    = bounds.y + currentBallPos.y - BALL_HALO;
     const ballBottom = bounds.y + currentBallPos.y + BALL_SIZE + BALL_HALO;
-    const isOver = cursor.x >= ballLeft && cursor.x <= ballRight &&
-                   cursor.y >= ballTop  && cursor.y <= ballBottom;
+    let isOver = cursor.x >= ballLeft && cursor.x <= ballRight &&
+                 cursor.y >= ballTop  && cursor.y <= ballBottom;
+    // 菜单打开：只要光标在「猫 + 面板」矩形内就继续接收鼠标，否则面板没法点击
+    if (!isOver && ballHitRegion) {
+      // 渲染端上报的是窗口内坐标，换算成屏幕坐标
+      const r = ballHitRegion;
+      const rx = bounds.x + r.x, ry = bounds.y + r.y;
+      isOver = cursor.x >= rx && cursor.x <= rx + r.w &&
+               cursor.y >= ry && cursor.y <= ry + r.h;
+    }
+
     const shouldIgnore = !isOver;
     if (lastIgnoreState !== shouldIgnore) {
       lastIgnoreState = shouldIgnore;
@@ -1580,6 +2075,67 @@ function notifyCritical(diagnosis, ctx) {
   } catch (e) {
     logger.warn('notify', 'show failed', { error: e.message });
   }
+}
+
+// ---------- 每日一签提醒 ----------
+let dailyReminderTimer = null;
+let dailyReminderDayTimer = null;
+
+function parseReminderTime(t) {
+  const m = /^([01]?d|2[0-3]):([0-5]d)$/.exec(String(t || '').trim());
+  if (!m) return null;
+  return { h: Number(m[1]), m: Number(m[2]) };
+}
+
+// 计算距离下一次提醒还有多少毫秒（本地时间）
+function msUntilNextReminder(time) {
+  const parsed = parseReminderTime(time) || { h: 9, m: 0 };
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parsed.h, parsed.m, 0, 0);
+  if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+  return next.getTime() - now.getTime();
+}
+
+function sendDailyReminder() {
+  const cfg = store.get('dailyReminder') || {};
+  if (!cfg.enabled) return;
+  const todayKey = fortune.getTodayKey();
+  if (cfg.lastNotifiedDate === todayKey) return; // 当天只提醒一次
+  if (!Notification.isSupported()) return;
+  const cached = (store.get('todayFortune') || {})[todayKey];
+  const body = cached && cached.data
+    ? '猫叼来今天的签了，点我看看。'
+    : '猫在桌角等你，点我抽今天的签。';
+  try {
+    const n = new Notification({
+      title: '今日运势 · 每日一签',
+      body,
+      silent: false,
+    });
+    n.on('click', () => {
+      if (!ballWindow || ballWindow.isDestroyed()) createBallWindow();
+      ballWindow.show();
+      ballWindow.focus();
+      ballWindow.webContents.send('shortcut-draw', 'today');
+    });
+    n.show();
+    store.set('dailyReminder', { ...cfg, lastNotifiedDate: todayKey });
+    logger.info('reminder', 'daily notification shown');
+  } catch (e) {
+    logger.warn('reminder', 'show failed: ' + e.message);
+  }
+}
+
+function scheduleDailyReminder() {
+  if (dailyReminderTimer) { clearTimeout(dailyReminderTimer); dailyReminderTimer = null; }
+  const cfg = store.get('dailyReminder') || {};
+  if (!cfg.enabled) return;
+  const wait = Math.max(30 * 1000, Math.min(msUntilNextReminder(cfg.time), 24 * 3600 * 1000));
+  dailyReminderTimer = setTimeout(() => {
+    sendDailyReminder();
+    scheduleDailyReminder(); // 安排下一天
+  }, wait);
+  logger.info('reminder', 'scheduled in ' + Math.round(wait / 1000) + 's');
 }
 
 function startWatcher() {

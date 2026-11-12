@@ -260,17 +260,20 @@ async function testConnection({ baseUrl, token, model }) {
   logger.info('ai.testConnection', `baseUrl=${baseUrl} model=${model || DEFAULT_MODEL}`);
   if (!token) return { ok: false, error: 'NO_TOKEN' };
   try {
+    // 测试只校验鉴权/网络/模型名，不需要结构化输出：
+    // jsonMode=false 避免 DeepSeek 要求 prompt 里必须出现 "json" 字样而误报失败
     const result = await callLLM({
       baseUrl,
       token,
       messages: [
-        { role: 'system', content: '你是一个测试助手。' },
-        { role: 'user', content: '请返回 {"text":"ok"}' },
+        { role: 'system', content: '你是一个连通性测试助手，只回复 OK。' },
+        { role: 'user', content: '回复 OK' },
       ],
       model: model || DEFAULT_MODEL,
       temperature: 0.1,
-      maxTokens: 32,
+      maxTokens: 8,
       timeoutMs: 8000,
+      jsonMode: false,
     });
     return { ok: true, model: result.model };
   } catch (e) {

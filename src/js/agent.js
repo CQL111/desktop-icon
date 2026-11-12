@@ -7,6 +7,7 @@ const spirit = require('./fortuneSpirit');
 const behavior = require('./behavior');
 const logger = require('./logger');
 const scenes = require('./scenarios/registry');
+const canon = require('./canon');
 
 const MAX_STEPS = 6;
 const RESULT_MAX = 2400;
@@ -16,6 +17,9 @@ const SYSTEM_PROMPT =
   '你是桌面应用「今日运势」里的运势助手，可以和用户连续对话。' +
   '需要具体测算、黄历、时辰、个人命理、签文/塔罗、精灵加持时，必须先调用对应 tool，再基于返回数据解读。' +
   '不要编造分数、宜忌、签文、塔罗牌或加持值。' +
+  '涉及八字格局、十神、五行强弱、易经卦象等命理理论时，先调用 search_canon 检索典籍原文，再引用；' +
+  '引用必须是 search_canon 返回的原文，并标注出处（如「《渊海子平·财多身弱》」），不得编造或改写原文当作引文。' +
+  '检索不到时如实说明「典籍中没有直接对应」，再给出你的理解。' +
   'bless_spirit 会真正改写用户加持，仅在用户明确要求祈福时调用。' +
   '用中文回答，简洁，一般 2-8 句；可以追问。';
 
@@ -24,7 +28,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_almanac',
-      description: '按日期生成黄历：干支年、生肖、宜忌、幸运色和数字。不传 date 则用今天。',
+      description: '按日期生成黄历：农历日期、节气、干支年/月/日、建除十二值日、黄黑道、冲煞、彭祖百忌、吉时、宜忌、幸运色和数字。不传 date 则用今天。宜忌为传统规则参考。',
       parameters: {
         type: 'object',
         properties: {
@@ -87,6 +91,21 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'search_canon',
+      description: '检索命理典籍原文（周易、滴天髓、渊海子平），返回带出处的原文片段。用于八字格局、十神、五行、卦象等理论问题；引用时必须以返回的原文为准并标注出处。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '检索关键词，如「财多身弱」「伤官见官」「乾卦」' },
+          book: { type: 'string', enum: ['zhouyi', 'ditiansui', 'yuanhai'], description: '限定书目，可不填' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_spirit_status',
       description: '运势精灵五项加持、今日祈福剩余次数、当前摆位五行。',
       parameters: { type: 'object', properties: {} },
@@ -114,6 +133,7 @@ const TOOL_LABELS = {
   get_today_fortune: '测算今日',
   get_personal_chart: '个人命理',
   get_range_fortune: '测算时段',
+  search_canon: '查阅典籍',
   get_spirit_status: '查看精灵',
   bless_spirit: '祈福',
 };
@@ -170,7 +190,7 @@ function executeTool(name, args, ctx = {}) {
     if (name === 'get_hour_fortune') {
       const hourKey = fortune.getCurrentHourKey();
       return applyBoost(
-        fortune.genHourFortune({ dateKey: todayKey, hourKey, profile }),
+        fortune.genHourFortune({ dateKey: todayKey, hourKey, profile, installId: ctx.installId }),
         ctx,
       );
     }
@@ -179,7 +199,7 @@ function executeTool(name, args, ctx = {}) {
         ? args.style
         : behavior.pickStyle(ctx.behaviorMap || {});
       return applyBoost(
-        fortune.generate(style, { dateKey: todayKey, zodiac: ctx.zodiac }),
+        fortune.generate(style, { dateKey: todayKey, zodiac: ctx.zodiac, installId: ctx.installId }),
         ctx,
       );
     }
@@ -194,16 +214,24 @@ function executeTool(name, args, ctx = {}) {
       );
     }
     if (name === 'get_range_fortune') {
-      if (args.range === 'week') return applyBoost(fortune.genWeekFortune({ dateKey: todayKey }), ctx);
+      if (args.range === 'week') return applyBoost(fortune.genWeekFortune({ dateKey: todayKey, installId: ctx.installId }), ctx);
       if (args.range === 'tomorrow') {
         const tomorrowKey = fortune.getTodayKey(new Date(Date.now() + 86400000));
-        return applyBoost(fortune.genTomorrowFortune({ dateKey: tomorrowKey }), ctx);
+        return applyBoost(fortune.genTomorrowFortune({ dateKey: tomorrowKey, installId: ctx.installId }), ctx);
       }
       return { error: 'INVALID_RANGE' };
     }
+    if (name === 'search_canon') {
+      const q = String(args.query || '').trim();
+      if (!q) return { ok: false, error: 'EMPTY_QUERY' };
+      const r = canon.search(q, { book: args.book, limit: 3 });
+      if (!r.ok) return { ok: false, error: r.error || 'NO_HIT', query: q, results: [] };
+      return r;
+    }
     if (name === 'get_spirit_status') {
       const s = ctx.spirit || spirit.defaultSpirit();
-      const today = spirit.getTodayKey();
+      // 用应用时区算“今天”，和 blessed 时写入的口径保持一致
+      const today = fortune.getTodayKey();
       const used = s.lastBlessDate === today ? (s.blessCountToday || 0) : 0;
       return {
         boosts: s.boosts,
@@ -271,6 +299,7 @@ async function runAgent({ history, userQuery, aiConfig, ctx = {}, callLLM, onPro
 
   const usageTotal = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   const toolsUsed = [];
+  const citations = [];
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const result = await callLLM({
@@ -299,6 +328,7 @@ async function runAgent({ history, userQuery, aiConfig, ctx = {}, callLLM, onPro
       return {
         text,
         toolsUsed,
+        citations: citations.slice(0, 6),
         scene,
         usage: usageTotal,
         history: trimByUserTurns(messages.filter((m) => m.role !== 'system')),
@@ -319,6 +349,13 @@ async function runAgent({ history, userQuery, aiConfig, ctx = {}, callLLM, onPro
       if (typeof onProgress === 'function') onProgress({ tool: name, label: labels[name] || name });
       toolsUsed.push(name);
       const out = executeTool(name, args, ctx);
+      if (name === 'search_canon' && out && Array.isArray(out.results)) {
+        for (const r of out.results) {
+          if (!r || !r.ref) continue;
+          const exists = citations.find((c) => c.ref === r.ref);
+          if (!exists) citations.push({ ref: r.ref, book: r.book, title: r.title, text: r.text, matched: !!r.matched });
+        }
+      }
       messages.push({
         role: 'tool',
         tool_call_id: id,

@@ -12,11 +12,11 @@ function showToast(text) {
 
 // 维度定义（图标 + 颜色）
 const DIMS = [
-  { key: '综合', icon: '⭐', color: '#9b59b6' },
-  { key: '爱情', icon: '❤️', color: '#ff6b81' },
-  { key: '事业', icon: '💼', color: '#2ecc71' },
-  { key: '财运', icon: '💰', color: '#f1c40f' },
-  { key: '健康', icon: '🌿', color: '#3498db' },
+  { key: '综合', icon: '⭐', color: '#ff8aa3' },
+  { key: '爱情', icon: '❤️', color: '#ff9fae' },
+  { key: '事业', icon: '💼', color: '#8ce8b0' },
+  { key: '财运', icon: '💰', color: '#fcd34d' },
+  { key: '健康', icon: '🌿', color: '#b3a7ff' },
 ];
 
 // 五行 → 维度

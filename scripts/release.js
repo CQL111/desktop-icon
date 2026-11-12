@@ -45,7 +45,10 @@ execSync('git push origin HEAD --tags', { stdio: 'inherit' });
 
 // 触发 electron-builder 构建并发布
 console.log('🚀 开始构建并发布到 GitHub...');
-execSync('electron-builder --win --publish always', { 
+// 若本地 build/bundled-ai.json 存在，则用内置 Key 的配置发布
+const withKey = fs.existsSync(path.resolve(__dirname, '../build/bundled-ai.json'));
+const cfgArg = withKey ? ' --config electron-builder.key.yml' : '';
+execSync('electron-builder --win --publish always' + cfgArg, { 
   stdio: 'inherit',
   env: { ...process.env }
 });

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "zhouyi",
+    "title": "周易",
+    "school": "易学",
+    "license": "原文公版；数字文本 CC BY-SA 4.0（维基文库经 mingli 镜像）",
+    "source": "https://zh.wikisource.org/wiki/周易",
+    "raw": "raw/zhouyi.txt",
+    "parts": 64,
+    "bytes": 60330
+  },
+  {
+    "id": "ditiansui",
+    "title": "滴天髓",
+    "school": "八字",
+    "license": "原文公版；数字文本 CC BY-SA 4.0（维基文库经 mingli 镜像）",
+    "source": "https://zh.wikisource.org/wiki/滴天髓",
+    "raw": "raw/ditiansui.txt",
+    "parts": 10,
+    "bytes": 16500
+  },
+  {
+    "id": "yuanhai",
+    "title": "渊海子平",
+    "school": "八字",
+    "license": "原文公版；数字文本 CC BY-SA 4.0（维基文库经 mingli 镜像）",
+    "source": "https://zh.wikisource.org/wiki/淵海子平",
+    "raw": "raw/yuanhai.txt",
+    "parts": 1,
+    "bytes": 172953
+  }
+]

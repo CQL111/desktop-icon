@@ -89,16 +89,18 @@ function renderTraditional(f) {
   const luckRow = el('div', { style: 'display:flex; gap:8px; flex-wrap:wrap;' });
   luckRow.appendChild(el('div', { class: 'tag' }, [`幸运数字 ${f.luckyNum}`]));
   luckRow.appendChild(el('div', { class: 'tag' }, [`生肖 ${f.shengxiao}`]));
-  const colorChip = el('div', { class: 'color-chip' }, [
-    el('div', { class: 'color-dot', style: `background:${f.luckyColor.hex}` }),
-    document.createTextNode(f.luckyColor.name),
-  ]);
-  luckRow.appendChild(colorChip);
-  const wuxingChip = el('div', { class: 'color-chip' }, [
-    el('div', { class: 'color-dot', style: `background:${f.wuxingColor.hex}` }),
-    document.createTextNode(`${f.wuxingColor.element}行 ${f.wuxingColor.name}`),
-  ]);
-  luckRow.appendChild(wuxingChip);
+  if (f.luckyColor && f.luckyColor.hex) {
+    luckRow.appendChild(el('div', { class: 'color-chip' }, [
+      el('div', { class: 'color-dot', style: `background:${f.luckyColor.hex}` }),
+      document.createTextNode(f.luckyColor.name || ''),
+    ]));
+  }
+  if (f.wuxingColor && f.wuxingColor.hex) {
+    luckRow.appendChild(el('div', { class: 'color-chip' }, [
+      el('div', { class: 'color-dot', style: `background:${f.wuxingColor.hex}` }),
+      document.createTextNode(`${f.wuxingColor.element || ''}行 ${f.wuxingColor.name || ''}`),
+    ]));
+  }
   luckBox.appendChild(luckRow);
   wrap.appendChild(luckBox);
 
@@ -205,8 +207,8 @@ function renderPersonalized(f) {
   else base = renderModern(f);
   // 顶部插入 tagline
   if (f.tagline) {
-    const tag = el('div', { class: 'section', style: 'background:rgba(255, 220, 180, 0.4); margin-top:0;' }, [
-      el('div', { class: 'section-content', style: 'font-style:italic; color:#8a4458;' }, [f.tagline]),
+    const tag = el('div', { class: 'section', style: 'background:var(--accent-gold-soft); border:1px solid var(--glass-hairline); margin-top:0;' }, [
+      el('div', { class: 'section-content', style: 'font-style:italic; color:var(--text-2);' }, [f.tagline]),
     ]);
     const title = base.querySelector('.title');
     if (title && title.nextSibling) {
@@ -267,7 +269,7 @@ function renderTomorrow(f) {
   const base = renderModern(f);
   if (f.tomorrowHint) {
     const hint = el('div', { class: 'section tomorrow-hint' }, [
-      el('div', { class: 'section-content', style: 'font-style:italic; color:#5a4a8a;' }, [f.tomorrowHint]),
+      el('div', { class: 'section-content', style: 'font-style:italic; color:var(--text-2);' }, [f.tomorrowHint]),
     ]);
     const title = base.querySelector('.title');
     if (title && title.nextSibling) {
@@ -310,7 +312,7 @@ function renderWeek(f) {
   if (f.weeklyHint) {
     wrap.appendChild(el('div', { class: 'section' }, [
       el('div', { class: 'section-title' }, ['本周提提示']),
-      el('div', { class: 'section-content', style: 'font-style:italic; color:#3a5a8a;' }, [f.weeklyHint]),
+      el('div', { class: 'section-content', style: 'font-style:italic; color:var(--text-2);' }, [f.weeklyHint]),
     ]));
   }
 
@@ -358,7 +360,7 @@ function renderProfile(f) {
     wrap.appendChild(el('div', { class: 'section' }, [
       el('div', { class: 'section-title' }, [`${f.zodiac} · 性格`]),
       el('div', { class: 'section-content' }, [f.zodiacTraits]),
-      el('div', { class: 'section-content', style: 'font-style:italic;color:#5a4a8a;margin-top:6px;' }, [f.zodiacLuck]),
+      el('div', { class: 'section-content', style: 'font-style:italic;color:var(--text-2);margin-top:6px;' }, [f.zodiacLuck]),
     ]));
   } else {
     wrap.appendChild(el('div', { class: 'section' }, [
@@ -367,7 +369,7 @@ function renderProfile(f) {
     ]));
     if (f.comprehensiveHint) {
       wrap.appendChild(el('div', { class: 'section' }, [
-        el('div', { class: 'section-content', style: 'font-style:italic;color:#5a4a8a;' }, [f.comprehensiveHint]),
+        el('div', { class: 'section-content', style: 'font-style:italic;color:var(--text-2);' }, [f.comprehensiveHint]),
       ]));
     }
   }
@@ -402,8 +404,9 @@ const RENDERERS = {
   profile: renderProfile,
 };
 
-function render(style, fortune) {
+function render(style, fortune, opts = {}) {
   content.innerHTML = '';
+  content.classList.toggle('reveal-in', !!opts.reveal);
   // AI 提问卡片走专属渲染
   if (style === 'ai-ask') {
     renderAiAsk(fortune);
@@ -440,20 +443,65 @@ function render(style, fortune) {
     style === 'profile'
       ? el('button', { class: 'action-btn primary', onclick: handleProfileDecode }, ['🔮 解算'])
       : null,
+    ['traditional', 'modern', 'lots', 'tarot', 'personalized'].includes(style)
+      ? el('button', { class: 'action-btn', onclick: handleRedraw }, ['换一换'])
+      : null,
     el('button', { class: 'action-btn', onclick: handleClose }, ['关闭']),
   ]);
   content.appendChild(actions);
+
+  // 揭晓入场：标题逐字、内容逐行、卡片扫光（替代原来球窗口里的小揭晓卡）
+  if (opts.reveal) applyRevealStagger();
+}
+
+// 揭晓入场：给标题逐字、其余块逐行加延迟；再触发卡片扫光
+function applyRevealStagger() {
+  const title = content.querySelector('.title');
+  if (title) {
+    const text = title.textContent || '';
+    title.textContent = '';
+    Array.from(text).forEach((ch, i) => {
+      const span = document.createElement('span');
+      span.textContent = ch;
+      span.className = 'rv-ch';
+      span.style.animationDelay = (0.06 + i * 0.045) + 's';
+      title.appendChild(span);
+    });
+  }
+  // 除标题外的主要块依次上浮
+  const blocks = content.querySelectorAll(':scope > .card-content > *, :scope > .section, :scope > .almanac-bar, :scope > .boost-bar');
+  blocks.forEach((node, i) => {
+    if (node.querySelector('.rv-ch')) return;
+    node.classList.add('rv-up');
+    node.style.animationDelay = (0.12 + Math.min(i, 8) * 0.06) + 's';
+  });
+  // 卡片扫光
+  const card = document.getElementById('card');
+  if (card) {
+    card.classList.remove('shine');
+    void card.offsetWidth;
+    card.classList.add('shine');
+  }
 }
 
 // 今日黄历头部
 function renderAlmanacBar(al) {
   const wrap = el('div', { class: 'almanac-bar' });
-  // 干支年 + 生肖
+  // 第一行：农历 + 干支 + 生肖
   wrap.appendChild(el('div', { class: 'almanac-head' }, [
+    al.lunarText ? el('span', { class: 'almanac-lunar' }, [al.lunarText]) : null,
     el('span', { class: 'almanac-ganzhi' }, [al.yearGanzhi]),
-    document.createTextNode(' '),
-    el('span', { class: 'almanac-shengxiao' }, [`🐲 ${al.shengxiao}年`]),
+    el('span', { class: 'almanac-shengxiao' }, [`${al.shengxiao}年`]),
   ]));
+  // 第二行：节气 / 日干支 / 建除 / 黄黑道
+  const meta = el('div', { class: 'almanac-meta' });
+  if (al.term) meta.appendChild(el('span', { class: 'almanac-tag term' }, [al.term]));
+  if (al.dayGanzhi) meta.appendChild(el('span', { class: 'almanac-tag' }, [`${al.dayGanzhi}日`]));
+  if (al.jianchu) meta.appendChild(el('span', { class: 'almanac-tag' }, [`${al.jianchu}日`]));
+  if (al.huangdaoText) {
+    meta.appendChild(el('span', { class: 'almanac-tag ' + (al.huangdao ? 'good' : 'bad') }, [al.huangdaoText]));
+  }
+  if (meta.childNodes.length) wrap.appendChild(meta);
   // 宜
   if (al.yi && al.yi.length) {
     wrap.appendChild(el('div', { class: 'almanac-row' }, [
@@ -468,6 +516,15 @@ function renderAlmanacBar(al) {
       document.createTextNode(' ' + al.ji.join(' · ')),
     ]));
   }
+  // 冲煞 + 吉时
+  if (al.chong || (al.luckyHours && al.luckyHours.length)) {
+    const extra = el('div', { class: 'almanac-row almanac-extra' });
+    if (al.chong) extra.appendChild(el('span', { class: 'almanac-chong' }, [al.chong]));
+    if (al.luckyHours && al.luckyHours.length) {
+      extra.appendChild(el('span', { class: 'almanac-hours' }, [`吉时 ${al.luckyHours.slice(0, 4).join(' ')}`]));
+    }
+    wrap.appendChild(extra);
+  }
   // 幸运
   if (al.luckyColor || al.luckyNum) {
     const luckRow = el('div', { class: 'almanac-row almanac-luck' });
@@ -479,6 +536,10 @@ function renderAlmanacBar(al) {
       ]));
     }
     wrap.appendChild(luckRow);
+  }
+  // 免责说明
+  if (al.yiJiNote) {
+    wrap.appendChild(el('div', { class: 'almanac-note' }, [al.yiJiNote]));
   }
   return wrap;
 }
@@ -560,13 +621,13 @@ async function handleRedraw() {
   if (currentStyle) {
     await window.api.manualSwitch(currentStyle);
   }
-  // 关闭当前卡片，触发重新抽签
-  await window.api.closeCard();
-  // 通过球点击触发新的抽签：直接调用 draw-fortune IPC 然后重新打开
-  const result = await window.api.drawFortune();
+  // 注意：主进程 closeCard() 只会 hide，卡片文本会残留；
+  // 这里重新 draw 后通过 card-data 事件触发重新渲染，不需要手动关窗
+  // force=true：跳过当天缓存，换一种风格
+  const result = await window.api.drawFortune({ force: true });
   if (result) {
     currentStyle = result.style;
-    render(result.style, result.fortune);
+    render(result.style, result.fortune, { reveal: true });
   }
 }
 
@@ -595,10 +656,10 @@ async function handleClose() {
 }
 
 // ---------- 监听主进程 ----------
-window.api.onCardData(({ style, fortune: fortuneData }) => {
-  window.logger.info('card.onData', `style=${style}`);
+window.api.onCardData(({ style, fortune: fortuneData, reveal }) => {
+  window.logger.info('card.onData', `style=${style} reveal=${!!reveal}`);
   currentStyle = style;
-  render(style, fortuneData);
+  render(style, fortuneData, { reveal: !!reveal });
   // 通知主进程卡片打开（用于统计 view_seconds）
   window.api.cardOpened();
 });
@@ -622,8 +683,39 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// 监听 AI 解读追加事件
+// AI 不可用提示：显示在 AI 区块的位置，点击打开设置
+function appendAiStatus(kind, text) {
+  const block = document.getElementById('ai-block');
+  if (!block) return;
+  block.style.display = '';
+  block.innerHTML = '';
+  const hint = el('div', { class: 'ai-status-hint', title: '打开设置' }, [
+    el('span', {}, ['🤖']),
+    document.createTextNode(' ' + (text || 'AI 解读不可用')),
+  ]);
+  hint.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.api.openSettings();
+  });
+  block.appendChild(hint);
+  block.style.opacity = '0';
+  block.style.transition = 'opacity 0.4s';
+  requestAnimationFrame(() => { block.style.opacity = '1'; });
+}
+
+window.api.onAiStatus((payload) => {
+  if (!payload) return;
+  if (payload.style && currentStyle && payload.style !== currentStyle) return;
+  window.logger.info('card.aiStatus', `kind=${payload.kind || 'unknown'}`);
+  appendAiStatus(payload.kind, payload.text);
+});
+
+// 监听 AI 解读追加事件（带 style 校验，避免上一张卡片的解读串到新卡片上）
 window.api.onAiInterpretationReady((payload) => {
+  if (payload && payload.style && currentStyle && payload.style !== currentStyle) {
+    window.logger.info('card.aiReady', `stale style=${payload.style} (now ${currentStyle})`);
+    return;
+  }
   window.logger.info('card.aiReady', `text length=${(payload.text || '').length}`);
   appendAiInterpretation(payload.text, payload.usage);
 });

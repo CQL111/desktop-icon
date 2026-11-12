@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今日运势 · 桌面悬浮球 — 产品介绍</title>
+<style>
+  /* ============================================================
+     Base
+     ============================================================ */
+  :root {
+    --cream: #fff9f2;
+    --ink: #3a2a1f;
+    --ink-2: #6f5250;
+    --muted: #9a7d78;
+    --rose: #ff8aa3;
+    --rose-deep: #c2607d;
+    --peach: #ffc6d5;
+    --gold: #e0a13c;
+    --plum: #3a1f2b;
+    --paper: rgba(255, 255, 255, 0.7);
+    --line: rgba(58, 42, 31, 0.12);
+    --shadow: 0 18px 50px rgba(150, 70, 90, 0.16);
+    --shadow-sm: 0 8px 24px rgba(150, 70, 90, 0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #140c10;
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .stage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1280px;
+    height: 720px;
+    margin: -360px 0 0 -640px;
+    transform-origin: center center;
+  }
+
+  .deck { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 4px; }
+
+  /* ============================================================
+     Slides
+     ============================================================ */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 50px 64px 66px;
+    overflow: hidden;
+    opacity: 0;
+  }
+  .slide.active { display: flex; animation: slideIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .slide[data-theme="light"] {
+    background:
+      radial-gradient(90% 70% at 88% 6%, rgba(255, 198, 213, 0.55) 0%, rgba(255, 198, 213, 0) 60%),
+      radial-gradient(70% 60% at 4% 96%, rgba(224, 161, 60, 0.14) 0%, rgba(224, 161, 60, 0) 65%),
+      linear-gradient(160deg, #fffaf4 0%, #fff2ec 48%, #ffe6e9 100%);
+    color: var(--ink);
+  }
+  .slide[data-theme="light"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(58, 42, 31, 0.055) 1px, transparent 1px);
+    background-size: 26px 26px;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 55%);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 55%);
+  }
+
+  .slide[data-theme="dark"] {
+    background:
+      radial-gradient(80% 90% at 74% 46%, rgba(255, 110, 145, 0.28) 0%, rgba(255, 110, 145, 0) 62%),
+      radial-gradient(60% 60% at 12% 100%, rgba(224, 161, 60, 0.16) 0%, rgba(224, 161, 60, 0) 70%),
+      linear-gradient(150deg, #4a2233 0%, #2a1620 45%, #180d13 100%);
+    color: #fff4ee;
+  }
+  .slide[data-theme="dark"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(255, 240, 235, 0.07) 1px, transparent 1px);
+    background-size: 30px 30px;
+    mask-image: radial-gradient(70% 70% at 50% 50%, rgba(0,0,0,0.7), transparent);
+    -webkit-mask-image: radial-gradient(70% 70% at 50% 50%, rgba(0,0,0,0.7), transparent);
+  }
+
+  .slide::after { z-index: 0; }
+  .slide > *:not(.cover-hint) { position: relative; z-index: 1; }
+  .slide > .cover-hint { z-index: 2; }
+
+  /* ============================================================
+     Typography & shared blocks
+     ============================================================ */
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.26em;
+    color: var(--rose-deep);
+    text-transform: uppercase;
+  }
+  .kicker .k-line { width: 34px; height: 2px; background: linear-gradient(90deg, var(--rose), rgba(255, 138, 163, 0)); border-radius: 2px; }
+  .slide[data-theme="dark"] .kicker { color: #ffb9c9; }
+  .slide[data-theme="dark"] .kicker .k-line { background: linear-gradient(90deg, #ffb9c9, rgba(255, 185, 201, 0)); }
+
+  .s-head { margin-bottom: 26px; }
+  .s-head h2 {
+    margin-top: 10px;
+    font-size: 42px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .s-head .lead {
+    margin-top: 10px;
+    max-width: 940px;
+    font-size: 15.5px;
+    line-height: 1.7;
+    color: var(--ink-2);
+  }
+  .accent { color: var(--rose-deep); }
+  .serif { font-family: Georgia, "Times New Roman", serif; }
+
+  .card {
+    background: var(--paper);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    border-radius: 22px;
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(8px);
+  }
+
+  /* entrance stagger */
+  .anim { animation: rise 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: var(--d, 0s); }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============================================================
+     1. Cover
+     ============================================================ */
+  .cover { justify-content: center; padding: 0 84px; }
+  .cover-grid { display: grid; grid-template-columns: 1.02fr 0.98fr; align-items: center; gap: 20px; }
+
+  .brand-row { display: flex; align-items: center; gap: 12px; margin-bottom: 34px; }
+  .brand-dot {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: radial-gradient(circle at 34% 28%, #fff6f8 0%, #ffd0dc 40%, #ff8aa3 100%);
+    box-shadow: 0 4px 14px rgba(255, 90, 130, 0.5), inset 0 -3px 6px rgba(120, 20, 50, 0.25);
+  }
+  .brand-row span {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.3em; color: rgba(255, 235, 228, 0.72);
+  }
+
+  .cover h1 {
+    font-size: 74px;
+    font-weight: 900;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    color: #fff9f4;
+  }
+  .cover h1 .grad {
+    display: inline-block;
+    background: linear-gradient(100deg, #ffd6e0 0%, #ff9db3 45%, #ffc878 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .cover .cover-sub {
+    margin-top: 24px;
+    max-width: 470px;
+    font-size: 16px;
+    line-height: 1.85;
+    color: rgba(255, 240, 234, 0.78);
+  }
+  .cover .cover-rule {
+    width: 56px; height: 3px; margin: 30px 0 24px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #ff8aa3, rgba(255, 200, 120, 0.9));
+  }
+  .cover-meta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cover-meta span {
+    padding: 7px 14px;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: rgba(255, 240, 234, 0.82);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+  }
+
+  .ball-orbit { position: relative; display: grid; place-items: center; width: 100%; height: 540px; }
+  .ball-halo {
+    position: absolute; width: 430px; height: 430px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 120, 150, 0.35) 0%, rgba(255, 120, 150, 0) 68%);
+    filter: blur(6px);
+  }
+  .ball-ring {
+    position: absolute; width: 400px; height: 400px; border-radius: 50%;
+    border: 1px dashed rgba(255, 210, 220, 0.22);
+    animation: spin 60s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .big-ball {
+    position: relative;
+    width: 226px; height: 226px; border-radius: 50%;
+    background: radial-gradient(circle at 34% 28%, #fff7f9 0%, #ffd2de 38%, #ff8aa3 100%);
+    box-shadow:
+      0 34px 70px rgba(255, 80, 120, 0.4),
+      inset 0 -14px 30px rgba(120, 20, 50, 0.3),
+      inset 0 12px 26px rgba(255, 255, 255, 0.6);
+    animation: float 6s ease-in-out infinite;
+  }
+  .big-ball::after {
+    content: "";
+    position: absolute; top: 9%; left: 18%;
+    width: 28%; height: 22%; border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 70%);
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-14px); }
+  }
+  .big-ball svg { position: absolute; inset: 0; width: 70%; height: 70%; margin: auto; }
+
+  .orbit-chip {
+    position: absolute;
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 16px;
+    font-size: 14.5px; font-weight: 700;
+    color: #5a2a3a;
+    background: rgba(255, 252, 250, 0.94);
+    border-radius: 999px;
+    box-shadow: 0 12px 30px rgba(40, 10, 20, 0.3);
+    white-space: nowrap;
+    animation: float 7s ease-in-out infinite;
+  }
+  .orbit-chip em { font-style: normal; font-size: 17px; }
+  /* 用独立的 translate 属性做居中，避免被 float 动画的 transform 覆盖 */
+  .oc-1 { top: 30px; left: 50%; translate: -50% 0; animation-delay: -1s; }
+  .oc-2 { top: 50%; right: 6px; translate: 0 -50%; animation-delay: -2.6s; }
+  .oc-3 { bottom: 30px; left: 50%; translate: -50% 0; animation-delay: -4.1s; }
+  .oc-4 { top: 50%; left: 6px; translate: 0 -50%; animation-delay: -5.4s; }
+
+  .cover-hint {
+    position: absolute; left: 84px; bottom: 34px;
+    font-size: 12px; letter-spacing: 0.12em;
+    color: rgba(255, 235, 228, 0.45);
+  }
+
+  /* ============================================================
+     2. Positioning
+     ============================================================ */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; flex: 1; align-content: start; }
+  .pillar {
+    position: relative;
+    padding: 30px 26px 26px;
+    background: var(--paper);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 24px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .pillar::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--rose), rgba(255, 200, 120, 0.85));
+  }
+  .pillar .p-num {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 15px; font-style: italic;
+    color: var(--rose-deep);
+  }
+  .pillar h3 { margin: 14px 0 10px; font-size: 24px; font-weight: 800; letter-spacing: 0.01em; }
+  .pillar p { font-size: 14px; line-height: 1.85; color: var(--ink-2); }
+  .pillar .p-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+  .pillar .p-tags span {
+    padding: 4px 10px; font-size: 11px; color: var(--rose-deep);
+    background: rgba(255, 138, 163, 0.12); border-radius: 999px;
+  }
+
+  .statement-quote {
+    margin-top: 26px;
+    display: flex; align-items: center; gap: 14px;
+    font-size: 16px; color: var(--ink-2);
+  }
+  .statement-quote::before {
+    content: "";
+    width: 3px; height: 30px; border-radius: 3px;
+    background: linear-gradient(180deg, var(--rose), var(--gold));
+  }
+
+  /* ============================================================
+     3. Why
+     ============================================================ */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; flex: 1; align-content: center; }
+  .compare-col {
+    padding: 26px 28px;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.46);
+    box-shadow: var(--shadow-sm);
+  }
+  .compare-col.before { color: var(--muted); }
+  .compare-col.after {
+    background: linear-gradient(160deg, rgba(255,255,255,0.85), rgba(255, 233, 236, 0.9));
+    border-color: rgba(255, 255, 255, 0.95);
+  }
+  .compare-col .cc-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .compare-col .cc-head b { font-size: 18px; font-weight: 800; color: var(--ink); }
+  .compare-col.before .cc-head b { color: var(--muted); }
+  .compare-col .cc-head span { font-size: 12px; letter-spacing: 0.08em; color: var(--rose-deep); }
+  .compare-col.before .cc-head span { color: var(--muted); }
+  .cc-steps { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .cc-steps li {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 14px; color: var(--ink-2);
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.55);
+  }
+  .compare-col.before .cc-steps li {
+    background: rgba(58, 42, 31, 0.035);
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: rgba(154, 125, 120, 0.4);
+  }
+  .cc-steps li .dot {
+    width: 22px; height: 22px; flex: none; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; font-family: Georgia, serif;
+    background: rgba(58, 42, 31, 0.07); color: var(--muted);
+  }
+  .compare-col.after .cc-steps li .dot { background: rgba(255, 138, 163, 0.16); color: var(--rose-deep); }
+  .cc-foot {
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px dashed var(--line);
+    font-size: 12.5px; color: var(--muted);
+  }
+  .compare-col.after .cc-foot { color: var(--rose-deep); font-weight: 600; }
+
+  /* ============================================================
+     4. Interaction
+     ============================================================ */
+  .interact { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 30px; flex: 1; align-items: center; }
+
+  .stage-ball {
+    position: relative; display: grid; place-items: center;
+    width: 100%; height: 400px;
+  }
+  .stage-ball .ring {
+    position: absolute; width: 300px; height: 300px; border-radius: 50%;
+    border: 1px dashed rgba(194, 96, 125, 0.28);
+  }
+  .stage-ball .halo {
+    position: absolute; width: 320px; height: 320px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 138, 163, 0.28) 0%, rgba(255, 138, 163, 0) 68%);
+  }
+  .stage-ball .mid-ball {
+    width: 136px; height: 136px; border-radius: 50%;
+    background: radial-gradient(circle at 34% 28%, #fff7f9 0%, #ffd2de 38%, #ff8aa3 100%);
+    box-shadow: 0 22px 44px rgba(200, 80, 110, 0.3), inset 0 -8px 18px rgba(120, 20, 50, 0.26), inset 0 8px 16px rgba(255,255,255,0.6);
+  }
+  .stage-ball .mid-ball svg { width: 70%; height: 70%; display: block; margin: 8px auto 0; }
+  .stage-ball .chip-label {
+    position: absolute;
+    padding: 7px 14px;
+    font-size: 13px; font-weight: 700; color: #5a2a3a;
+    background: #fffdfb;
+    border-radius: 999px;
+    box-shadow: 0 8px 22px rgba(90, 30, 50, 0.18);
+    white-space: nowrap;
+  }
+  .cl-1 { top: 18px; left: 50%; transform: translateX(-50%); }
+  .cl-2 { top: 50%; right: 0; transform: translateY(-50%); }
+  .cl-3 { bottom: 18px; left: 50%; transform: translateX(-50%); }
+  .cl-4 { top: 50%; left: 0; transform: translateY(-50%); }
+  .stage-ball .chip-label em { font-style: normal; margin-right: 5px; }
+  .stage-ball .hint-right {
+    position: absolute; right: 6px; bottom: 24px;
+    padding: 8px 14px;
+    font-size: 12.5px; font-weight: 700; color: #fff6f2;
+    background: linear-gradient(120deg, #c2607d, #ff8aa3);
+    border-radius: 999px;
+    box-shadow: 0 10px 24px rgba(194, 96, 125, 0.35);
+  }
+
+  .interact-list { display: flex; flex-direction: column; gap: 14px; }
+  .il-item {
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 16px 18px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: var(--shadow-sm);
+  }
+  .il-item .il-icon {
+    flex: none; width: 38px; height: 38px; border-radius: 12px;
+    display: grid; place-items: center; font-size: 18px;
+    background: linear-gradient(145deg, #fff, #ffe9ee);
+    box-shadow: inset 0 0 0 1px rgba(194, 96, 125, 0.12);
+  }
+  .il-item b { display: block; font-size: 15px; margin-bottom: 3px; }
+  .il-item p { font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+  .il-item code {
+    font-size: 11.5px; padding: 1px 6px; border-radius: 5px;
+    background: rgba(58, 42, 31, 0.06); color: var(--rose-deep);
+    font-family: Consolas, "SFMono-Regular", monospace;
+  }
+
+  /* ============================================================
+     5. Four signs
+     ============================================================ */
+  .signs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; flex: 1; align-content: center; }
+  .sign-card {
+    position: relative;
+    padding: 20px 24px 18px;
+    background: var(--paper);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .sign-card::after {
+    content: "";
+    position: absolute; right: -28px; top: -28px;
+    width: 96px; height: 96px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 138, 163, 0.16), rgba(255, 138, 163, 0));
+  }
+  .sc-head { display: flex; align-items: center; gap: 10px; }
+  .sc-icon {
+    width: 38px; height: 38px; border-radius: 12px;
+    display: grid; place-items: center; font-size: 19px;
+    background: linear-gradient(145deg, #fff, #ffe3e9);
+    box-shadow: inset 0 0 0 1px rgba(194, 96, 125, 0.1);
+  }
+  .sc-tag {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+    color: var(--rose-deep); text-transform: uppercase;
+    padding: 4px 9px; border-radius: 999px;
+    background: rgba(255, 138, 163, 0.12);
+  }
+  .sign-card h3 { margin: 13px 0 5px; font-size: 19px; font-weight: 800; }
+  .sign-card .sc-q { font-size: 13px; font-weight: 700; color: var(--rose-deep); }
+  .sign-card .sc-desc { margin-top: 8px; font-size: 13px; line-height: 1.65; color: var(--ink-2); }
+
+  /* ============================================================
+     6. Agent
+     ============================================================ */
+  .agent-grid { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 22px; flex: 1; align-items: stretch; }
+
+  .chat-card {
+    display: flex; flex-direction: column;
+    height: 100%;
+    padding: 18px 20px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 22px;
+    box-shadow: var(--shadow-sm);
+  }
+  .chat-head {
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 12px; margin-bottom: 4px;
+    border-bottom: 1px dashed var(--line);
+    font-size: 12.5px; font-weight: 700; color: var(--ink-2);
+  }
+  .chat-head .live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #77c37b;
+    box-shadow: 0 0 0 4px rgba(119, 195, 123, 0.18);
+  }
+  .chat-head .mini { margin-left: auto; font-weight: 500; font-size: 11px; color: var(--muted); }
+  .chat-body { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; overflow: hidden; flex: 1; }
+  .chat-body .msg:last-child { margin-top: auto; }
+
+  .msg { display: flex; gap: 10px; }
+  .msg .bubble {
+    max-width: 82%;
+    padding: 10px 14px;
+    font-size: 13px; line-height: 1.65;
+    border-radius: 14px;
+  }
+  .msg.me { justify-content: flex-end; }
+  .msg.me .bubble {
+    background: linear-gradient(135deg, #ff8aa3, #e87a95);
+    color: #fff;
+    border-bottom-right-radius: 5px;
+    box-shadow: 0 8px 18px rgba(255, 138, 163, 0.3);
+  }
+  .msg.bot .bubble {
+    background: #fffdfb;
+    color: var(--ink-2);
+    border-bottom-left-radius: 5px;
+    box-shadow: 0 6px 16px rgba(150, 70, 90, 0.1);
+  }
+  .msg.bot { flex-direction: column; gap: 8px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tools span {
+    font-size: 10.5px; font-weight: 600;
+    color: #8a5a20;
+    background: rgba(224, 161, 60, 0.14);
+    border: 1px solid rgba(224, 161, 60, 0.24);
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .typing { display: inline-flex; gap: 5px; padding: 12px 16px; background: #fffdfb; border-radius: 14px; width: fit-content; box-shadow: 0 6px 16px rgba(150, 70, 90, 0.1); }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: #d9b3bd; animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: 0.2s; }
+  .typing i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: 0.35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+
+  .tools-panel { align-self: start; padding: 20px 22px; background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 22px; box-shadow: var(--shadow-sm); }
+  .tp-title { font-size: 14px; font-weight: 800; margin-bottom: 12px; }
+  .tool-list { list-style: none; display: flex; flex-direction: column; }
+  .tool-list li {
+    display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px dashed rgba(58, 42, 31, 0.08);
+    font-size: 12px;
+  }
+  .tool-list li:last-child { border-bottom: none; }
+  .tool-list code {
+    font-family: Consolas, "SFMono-Regular", monospace;
+    font-size: 11.5px; color: var(--rose-deep); font-weight: 600;
+  }
+  .tool-list span { color: var(--ink-2); }
+  .tp-note {
+    margin-top: 14px; padding: 12px 14px;
+    font-size: 12px; line-height: 1.65;
+    color: #7a5520;
+    background: rgba(224, 161, 60, 0.1);
+    border: 1px solid rgba(224, 161, 60, 0.18);
+    border-radius: 14px;
+  }
+
+  /* ============================================================
+     7. Spirit
+     ============================================================ */
+  .spirit-grid { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 34px; flex: 1; align-items: center; }
+
+  .spirit-board {
+    position: relative; width: 400px; height: 400px; margin: 0 auto;
+    border-radius: 32px;
+    background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.7), rgba(255, 246, 240, 0.35) 70%);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: var(--shadow);
+  }
+  .sb-ring {
+    position: absolute; inset: 54px; border-radius: 50%;
+    border: 1px dashed rgba(194, 96, 125, 0.3);
+  }
+  .sb-ring::after {
+    content: ""; position: absolute; inset: 62px; border-radius: 50%;
+    border: 1px dashed rgba(224, 161, 60, 0.22);
+  }
+  .sb-node {
+    position: absolute;
+    width: 78px; height: 78px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #fffdfb;
+    box-shadow: 0 10px 24px rgba(150, 70, 90, 0.16), inset 0 0 0 1px rgba(194, 96, 125, 0.1);
+  }
+  .sb-node b { font-family: "KaiTi", "STKaiti", Georgia, serif; font-size: 22px; line-height: 1; color: var(--rose-deep); }
+  .sb-node em { font-style: normal; margin-top: 5px; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+  .sb-node small { font-size: 9.5px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; }
+  .sb-tl { top: 10px; left: 16px; }
+  .sb-tr { top: 10px; right: 16px; }
+  .sb-bl { bottom: 10px; left: 16px; }
+  .sb-br { bottom: 10px; right: 16px; }
+  .sb-center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 98px; height: 98px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(150deg, #fff3ec, #ffe0d6);
+    box-shadow: 0 14px 30px rgba(150, 70, 90, 0.2), inset 0 0 0 1px rgba(224, 161, 60, 0.2);
+  }
+  .sb-center b { font-family: "KaiTi", "STKaiti", Georgia, serif; font-size: 26px; color: #b07a2c; line-height: 1; }
+  .sb-center em { font-style: normal; margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+  .sb-center small { font-size: 9.5px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; }
+  .sb-ball {
+    position: absolute; right: 92px; bottom: 74px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: radial-gradient(circle at 34% 28%, #fff7f9, #ffd2de 40%, #ff8aa3 100%);
+    box-shadow: 0 0 0 7px rgba(255, 138, 163, 0.18), 0 0 0 14px rgba(255, 138, 163, 0.08);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 7px rgba(255, 138, 163, 0.18), 0 0 0 14px rgba(255, 138, 163, 0.08); }
+    50%      { box-shadow: 0 0 0 10px rgba(255, 138, 163, 0.24), 0 0 0 22px rgba(255, 138, 163, 0.05); }
+  }
+  .sb-caption {
+    position: absolute; left: 0; right: 0; bottom: -30px;
+    text-align: center; font-size: 11.5px; color: var(--muted); letter-spacing: 0.08em;
+  }
+
+  .spirit-right { display: flex; flex-direction: column; gap: 18px; }
+  .rules { display: flex; flex-direction: column; gap: 10px; }
+  .rule { display: flex; gap: 13px; align-items: flex-start; }
+  .rule .r-num {
+    flex: none; width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: Georgia, serif; font-size: 12px; font-weight: 700;
+    color: #fff; background: linear-gradient(135deg, #ff8aa3, #c2607d);
+    box-shadow: 0 6px 14px rgba(194, 96, 125, 0.28);
+  }
+  .rule b { display: block; font-size: 14px; margin-bottom: 2px; }
+  .rule p { font-size: 12.5px; line-height: 1.65; color: var(--ink-2); }
+  .rule code { font-size: 11px; color: var(--rose-deep); background: rgba(255, 138, 163, 0.1); padding: 1px 5px; border-radius: 4px; }
+
+  .boost-card {
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.66);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 18px;
+    box-shadow: var(--shadow-sm);
+  }
+  .boost-card .bc-title {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12px; font-weight: 700; margin-bottom: 10px;
+  }
+  .boost-card .bc-title small { font-size: 10.5px; font-weight: 500; color: var(--muted); }
+  .boost-row { display: grid; grid-template-columns: 38px 1fr 40px; gap: 10px; align-items: center; padding: 4px 0; }
+  .boost-row span { font-size: 12px; color: var(--ink-2); }
+  .boost-track { height: 8px; border-radius: 999px; background: rgba(58, 42, 31, 0.07); overflow: hidden; }
+  .boost-track i {
+    display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, #ffb3c3, #ff8aa3);
+    animation: grow 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .boost-row:nth-child(4) .boost-track i { background: linear-gradient(90deg, #ffd699, #e0a13c); }
+  .boost-row b { font-family: Georgia, serif; font-size: 12px; color: var(--rose-deep); text-align: right; }
+  @keyframes grow { from { width: 0 !important; } }
+
+  /* ============================================================
+     8. Personalization
+     ============================================================ */
+  .flow-card { padding: 26px 26px; margin-bottom: 22px; }
+  .flow { display: flex; align-items: center; gap: 16px; }
+  .fnode {
+    flex: 1;
+    padding: 18px 20px;
+    border-radius: 18px;
+    background: #fffdfb;
+    border: 1px solid rgba(194, 96, 125, 0.12);
+    box-shadow: 0 8px 20px rgba(150, 70, 90, 0.08);
+  }
+  .fnode b { display: block; font-size: 16px; margin-bottom: 6px; }
+  .fnode small { font-size: 12px; line-height: 1.6; color: var(--ink-2); }
+  .fnode.input { flex: 0 0 210px; background: linear-gradient(150deg, #fff7f2, #ffe9ec); }
+  .fnode.out { flex: 0 0 240px; background: linear-gradient(150deg, rgba(255, 236, 214, 0.85), rgba(255, 246, 236, 0.9)); }
+  .farrow { flex: none; font-size: 22px; color: var(--rose-deep); opacity: 0.6; }
+
+  .style-block { padding: 22px 26px; }
+  .style-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .style-head b { font-size: 15px; }
+  .style-head span { font-size: 11px; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pills span {
+    padding: 7px 15px;
+    font-size: 12.5px; font-weight: 600;
+    color: var(--ink-2);
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(194, 96, 125, 0.16);
+    border-radius: 999px;
+  }
+  .pills span:nth-child(1) { color: #fff; background: linear-gradient(135deg, #ff8aa3, #e87a95); border-color: transparent; }
+  .style-note { margin-top: 14px; font-size: 12.5px; line-height: 1.7; color: var(--ink-2); }
+  .style-note b { color: var(--rose-deep); }
+
+  /* ============================================================
+     9. Architecture
+     ============================================================ */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+  .stat {
+    padding: 16px 20px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: var(--shadow-sm);
+  }
+  .stat b {
+    display: block;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 34px; line-height: 1; font-weight: 700;
+    color: var(--rose-deep);
+  }
+  .stat span { display: block; margin-top: 7px; font-size: 11.5px; color: var(--ink-2); letter-spacing: 0.03em; }
+
+  .arch { display: flex; flex-direction: column; gap: 12px; }
+  .arch-layer {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 18px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+  }
+  .arch-layer .al-label {
+    flex: none; width: 76px;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+    color: var(--rose-deep);
+  }
+  .al-boxes { display: flex; flex-wrap: wrap; gap: 7px; }
+  .al-boxes span {
+    padding: 5px 11px;
+    font-size: 11.5px; color: var(--ink-2);
+    background: #fffdfb;
+    border: 1px solid rgba(58, 42, 31, 0.08);
+    border-radius: 8px;
+  }
+  .arch-layer.main { background: linear-gradient(120deg, rgba(255, 233, 236, 0.9), rgba(255, 247, 240, 0.8)); }
+  .arch-bridge {
+    align-self: center;
+    padding: 5px 18px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+    color: #8a5a20;
+    background: rgba(224, 161, 60, 0.13);
+    border-radius: 999px;
+  }
+  .arch-mods {
+    padding: 10px 16px;
+    font-family: Consolas, "SFMono-Regular", monospace;
+    font-size: 10.8px; line-height: 1.7; letter-spacing: 0.01em;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .run-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--line);
+  }
+  .run-strip div {
+    padding: 11px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+  }
+  .run-strip b {
+    display: block;
+    font-family: Consolas, "SFMono-Regular", monospace;
+    font-size: 11.5px; font-weight: 600;
+    color: var(--rose-deep);
+    margin-bottom: 4px;
+  }
+  .run-strip span { font-size: 10.5px; color: var(--muted); }
+
+  /* ============================================================
+     10. Trust
+     ============================================================ */
+  .trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; flex: 1; align-content: center; }
+  .trust-card { padding: 26px 24px; }
+  .trust-card .tc-icon {
+    width: 44px; height: 44px; border-radius: 14px;
+    display: grid; place-items: center; font-size: 20px;
+    background: linear-gradient(145deg, #fff, #ffe4ea);
+    box-shadow: inset 0 0 0 1px rgba(194, 96, 125, 0.1);
+  }
+  .trust-card h3 { margin: 16px 0 8px; font-size: 19px; font-weight: 800; }
+  .trust-card p { font-size: 13px; line-height: 1.75; color: var(--ink-2); }
+  .trust-card code { font-size: 11px; padding: 1px 5px; border-radius: 4px; background: rgba(58, 42, 31, 0.06); color: var(--rose-deep); }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
+  .chip-row span {
+    padding: 7px 14px;
+    font-size: 12px; color: var(--ink-2);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    border-radius: 999px;
+    box-shadow: 0 4px 12px rgba(150, 70, 90, 0.06);
+  }
+
+  /* ============================================================
+     11. Roadmap
+     ============================================================ */
+  .roadmap-grid { display: grid; grid-template-columns: 1.28fr 0.72fr; gap: 26px; flex: 1; align-items: start; align-content: center; }
+  .road-list { display: flex; flex-direction: column; gap: 10px; }
+  .road-item {
+    display: flex; gap: 18px; align-items: baseline;
+    padding: 13px 20px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 6px 18px rgba(150, 70, 90, 0.07);
+  }
+  .road-item .r-index {
+    flex: none; width: 54px;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 24px; font-style: italic; font-weight: 700;
+    color: rgba(194, 96, 125, 0.45);
+    line-height: 1;
+  }
+  .road-item b { display: block; font-size: 15px; margin-bottom: 3px; }
+  .road-item p { font-size: 12.5px; line-height: 1.6; color: var(--ink-2); }
+
+  .road-aside {
+    padding: 24px;
+    border-radius: 22px;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.8), rgba(255, 234, 236, 0.85));
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    box-shadow: var(--shadow-sm);
+  }
+  .road-aside h4 { font-size: 13px; letter-spacing: 0.16em; color: var(--rose-deep); text-transform: uppercase; }
+  .road-aside ul { list-style: none; margin-top: 16px; display: flex; flex-direction: column; gap: 11px; }
+  .road-aside li {
+    display: flex; gap: 9px; align-items: baseline;
+    font-size: 12.5px; color: var(--ink-2); line-height: 1.5;
+  }
+  .road-aside li::before { content: "·"; color: var(--rose-deep); font-weight: 900; }
+  .road-aside .aside-foot {
+    margin-top: 18px; padding-top: 14px;
+    border-top: 1px dashed var(--line);
+    font-size: 11.5px; line-height: 1.6; color: var(--muted);
+  }
+
+  /* ============================================================
+     12. Closing
+     ============================================================ */
+  .closing { justify-content: center; align-items: center; text-align: center; padding: 0 80px; }
+  .closing .end-ball {
+    width: 88px; height: 88px; border-radius: 50%;
+    margin-bottom: 30px;
+    background: radial-gradient(circle at 34% 28%, #fff7f9 0%, #ffd2de 38%, #ff8aa3 100%);
+    box-shadow: 0 20px 60px rgba(255, 90, 130, 0.5), inset 0 -6px 14px rgba(120, 20, 50, 0.3);
+    animation: float 5s ease-in-out infinite;
+  }
+  .closing h2 {
+    font-size: 64px;
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    color: #fff8f3;
+  }
+  .closing h2 .grad {
+    background: linear-gradient(100deg, #ffd6e0 0%, #ff9db3 50%, #ffc878 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .closing .end-sub {
+    margin-top: 18px;
+    font-size: 15px;
+    line-height: 1.8;
+    color: rgba(255, 240, 234, 0.68);
+  }
+  .end-commands { display: flex; gap: 10px; margin-top: 28px; }
+  .end-commands code {
+    padding: 9px 16px;
+    font-family: Consolas, "SFMono-Regular", monospace;
+    font-size: 12.5px;
+    color: #ffd9e2;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+  }
+  .end-commands code b { color: #ffc878; font-weight: 600; }
+  .end-meta {
+    margin-top: 40px;
+    display: flex; gap: 26px;
+    font-size: 11.5px; letter-spacing: 0.1em;
+    color: rgba(255, 240, 234, 0.42);
+  }
+
+  /* ============================================================
+     HUD / navigation
+     ============================================================ */
+  .progress {
+    position: fixed; top: 0; left: 0; right: 0; height: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    z-index: 50;
+  }
+  .progress i {
+    display: block; height: 100%; width: 0;
+    background: linear-gradient(90deg, #ff8aa3, #ffc878);
+    transition: width 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+    box-shadow: 0 0 12px rgba(255, 138, 163, 0.6);
+  }
+  .hud {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px;
+    background: rgba(24, 13, 19, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    backdrop-filter: blur(14px);
+    z-index: 50;
+    transition: opacity 0.4s ease;
+  }
+  .hud button {
+    width: 30px; height: 30px;
+    display: grid; place-items: center;
+    border: none; border-radius: 50%;
+    background: transparent;
+    color: rgba(255, 245, 240, 0.72);
+    font-size: 17px; line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .hud button:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+  .dots { display: flex; align-items: center; gap: 2px; padding: 0 4px; }
+  .dots button {
+    width: 18px; height: 26px;
+    position: relative;
+    background: transparent; border: none; cursor: pointer;
+  }
+  .dots button::after {
+    content: "";
+    position: absolute; top: 50%; left: 50%;
+    width: 5px; height: 5px; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 245, 240, 0.28);
+    transition: all 0.25s ease;
+  }
+  .dots button:hover::after { background: rgba(255, 245, 240, 0.6); }
+  .dots button.on::after { width: 16px; border-radius: 999px; background: linear-gradient(90deg, #ff8aa3, #ffc878); }
+
+  .counter {
+    position: fixed; right: 22px; bottom: 26px;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 12px; letter-spacing: 0.14em;
+    color: rgba(255, 245, 240, 0.42);
+    z-index: 50;
+    pointer-events: none;
+  }
+  .counter b { color: rgba(255, 245, 240, 0.85); font-weight: 500; }
+
+  .keys-hint {
+    position: fixed; left: 22px; bottom: 26px;
+    font-size: 10.5px; letter-spacing: 0.08em;
+    color: rgba(255, 245, 240, 0.3);
+    z-index: 50;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
+  /* ============================================================
+     Print
+     ============================================================ */
+  @page { size: 1280px 720px; margin: 0; }
+  @media print {
+    html, body { overflow: visible; background: #fff; }
+    .stage { position: static; margin: 0; transform: none !important; width: 1280px; height: auto; }
+    .deck { overflow: visible; }
+    .slide {
+      position: relative; display: flex !important; opacity: 1 !important;
+      width: 1280px; height: 720px;
+      page-break-after: always; break-after: page;
+      animation: none !important;
+    }
+    .progress, .hud, .counter, .keys-hint { display: none !important; }
+    .anim { animation: none !important; opacity: 1 !important; transform: none !important; }
+    .enhanced { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress"><i id="progress-bar"></i></div>
+
+<div class="stage">
+  <div class="deck" id="deck">
+
+    <!-- ======================= 01 · Cover ======================= -->
+    <section class="slide cover" data-theme="dark" data-title="封面" data-section="封面">
+      <div class="cover-grid">
+        <div>
+          <div class="brand-row anim">
+            <span class="brand-dot"></span>
+            <span>FORTUNE BALL · 产品介绍</span>
+          </div>
+          <h1 class="anim" style="--d:.06s">今日运势<br><span class="grad">桌面悬浮球</span></h1>
+          <div class="cover-rule anim" style="--d:.12s"></div>
+          <p class="cover-sub anim" style="--d:.16s">
+            一枚常驻桌面、点击穿透的透明小球。<br>
+            抽一支签，养一只运势精灵，再让 AI 把今天讲给你听。
+          </p>
+          <div class="cover-meta anim" style="--d:.22s">
+            <span>Electron 30</span>
+            <span>Windows 10 / 11</span>
+            <span>v1.0.1</span>
+            <span>离线可用</span>
+          </div>
+        </div>
+
+        <div class="ball-orbit">
+          <div class="ball-halo"></div>
+          <div class="ball-ring"></div>
+          <div class="orbit-chip oc-1"><em>⏰</em>此刻</div>
+          <div class="orbit-chip oc-2"><em>📅</em>黄历</div>
+          <div class="orbit-chip oc-3"><em>👤</em>个人</div>
+          <div class="orbit-chip oc-4"><em>🔮</em>精灵</div>
+          <div class="big-ball">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M16 26 Q22 18 28 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <path d="M36 26 Q42 18 48 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <path d="M20 38 Q32 52 44 38 Q44 48 32 50 Q20 48 20 38 Z" fill="#3a2a1f"/>
+              <ellipse cx="11" cy="36" rx="3.5" ry="2.5" fill="#ff8aa3" opacity="0.85"/>
+              <ellipse cx="53" cy="36" rx="3.5" ry="2.5" fill="#ff8aa3" opacity="0.85"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="cover-hint">← → 翻页 &nbsp;·&nbsp; F 全屏 &nbsp;·&nbsp; 共 12 页</div>
+    </section>
+
+    <!-- ======================= 02 · Positioning ======================= -->
+    <section class="slide" data-theme="light" data-title="产品定位" data-section="产品定位">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>01 · 产品定位</div>
+        <h2>把「今天运气怎么样」<br>变成桌角的一秒钟</h2>
+        <p class="lead">它不是一个需要专门打开的应用，而是一枚长在桌面上的小球：平时安静，想用时伸手就能碰到。</p>
+      </header>
+
+      <div class="pillars">
+        <article class="pillar anim" style="--d:.05s">
+          <div class="p-num">01</div>
+          <h3>轻</h3>
+          <p>全屏透明窗口 + 点击穿透，球之外的一切鼠标事件都直接交给桌面；球的位置会被记住，下次开机还在原地。</p>
+          <div class="p-tags"><span>点击穿透</span><span>位置记忆</span><span>托盘常驻</span></div>
+        </article>
+        <article class="pillar anim" style="--d:.12s">
+          <div class="p-num">02</div>
+          <h3>快</h3>
+          <p>鼠标移上去浮出四个签，点一下直接弹卡。没有启动页、没有登录、没有广告，结果就在一秒钟之内。</p>
+          <div class="p-tags"><span>hover 四签</span><span>点签即出</span><span>失焦收起</span></div>
+        </article>
+        <article class="pillar anim" style="--d:.19s">
+          <div class="p-num">03</div>
+          <h3>懂你</h3>
+          <p>右键打开 AI 对话，Agent 按问题自动查黄历、时辰、命理；结合生日与精灵加持，给出属于你自己的解读。</p>
+          <div class="p-tags"><span>多轮对话</span><span>工具调用</span><span>个性化</span></div>
+        </article>
+      </div>
+
+      <div class="statement-quote anim" style="--d:.26s">
+        它解决的未必是「算命」，而是每天随时可能冒出来的那一点点——想要确定感。
+      </div>
+    </section>
+
+    <!-- ======================= 03 · Why ======================= -->
+    <section class="slide" data-theme="light" data-title="为什么是悬浮球" data-section="为什么">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>02 · 为什么</div>
+        <h2>运势，不该占用一整个 App</h2>
+        <p class="lead">大多数运势产品把「看一眼今天」做成了完整的产品旅程。我们希望把它还原成一个动作。</p>
+      </header>
+
+      <div class="compare">
+        <div class="compare-col before anim" style="--d:.05s">
+          <div class="cc-head"><b>传统运势产品</b><span>≈ 1–2 分钟</span></div>
+          <ol class="cc-steps">
+            <li><span class="dot">1</span>打开 App 或网页</li>
+            <li><span class="dot">2</span>经过首页推荐、广告或登录</li>
+            <li><span class="dot">3</span>选择「今日运势」再抽签</li>
+            <li><span class="dot">4</span>读一段对所有人都一样的文案</li>
+          </ol>
+          <div class="cc-foot">结果通常与「我」无关，也很难想再看第二次。</div>
+        </div>
+
+        <div class="compare-col after anim" style="--d:.13s">
+          <div class="cc-head"><b>今日运势 · 桌面悬浮球</b><span>≈ 1 秒</span></div>
+          <ol class="cc-steps">
+            <li><span class="dot">1</span>hover 悬浮球，四个签浮现</li>
+            <li><span class="dot">2</span>点一个签，运势卡片直接弹出</li>
+            <li><span class="dot">3</span>黄历 · 评分 · 个人 · 精灵加持同屏</li>
+            <li><span class="dot">4</span>想问更多，右键继续对话</li>
+          </ol>
+          <div class="cc-foot">不打断手上的事，用完即走。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= 04 · Interaction ======================= -->
+    <section class="slide" data-theme="light" data-title="交互方式" data-section="交互">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>03 · 交互</div>
+        <h2>所有入口，都长在球上</h2>
+        <p class="lead">不需要记菜单。鼠标靠近就能看见能做什么，四签以 40ms 级联浮现，移动上去各自放大。</p>
+      </header>
+
+      <div class="interact">
+        <div class="stage-ball anim" style="--d:.05s">
+          <div class="halo"></div>
+          <div class="ring"></div>
+          <div class="chip-label cl-1"><em>⏰</em>此刻个人运势</div>
+          <div class="chip-label cl-2"><em>📅</em>今日黄历</div>
+          <div class="chip-label cl-3"><em>👤</em>今日个人运势</div>
+          <div class="chip-label cl-4"><em>🔮</em>精灵祈福</div>
+          <div class="mid-ball">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="22" cy="26" r="3" fill="#3a2a1f"/>
+              <circle cx="42" cy="26" r="3" fill="#3a2a1f"/>
+              <path d="M22 42 Q32 48 42 42" stroke="#3a2a1f" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="hint-right">右键 → AI 对话</div>
+        </div>
+
+        <div class="interact-list">
+          <div class="il-item anim" style="--d:.10s">
+            <div class="il-icon">🖱️</div>
+            <div><b>Hover 球 → 四签浮现</b><p>透明球默认不响应点击；鼠标进入球体才接收事件，离开即恢复桌面操作。</p></div>
+          </div>
+          <div class="il-item anim" style="--d:.16s">
+            <div class="il-icon">👆</div>
+            <div><b>点签 → 弹运势卡片</b><p>卡片 380×600，带入场动画；点击外部或失焦自动收起，不留在屏幕上挡事。</p></div>
+          </div>
+          <div class="il-item anim" style="--d:.22s">
+            <div class="il-icon">✋</div>
+            <div><b>拖拽 → 位置记忆</b><p>拖到喜欢的位置松手即写入本地配置；坐标统一取整后再交给 Electron。</p></div>
+          </div>
+          <div class="il-item anim" style="--d:.28s">
+            <div class="il-icon">⌨️</div>
+            <div><b>托盘 + 快捷键兜底</b><p>托盘可抽一签、看今日 / 明日 / 本周黄历、开设置；<code>Ctrl+Alt+F</code> 随时抽今日一签。</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= 05 · Four signs ======================= -->
+    <section class="slide" data-theme="light" data-title="四个签" data-section="功能">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>04 · 功能</div>
+        <h2>四个签，回答四个问题</h2>
+        <p class="lead">此刻、今天、我自己、我的运气——四类信息各有自己的生成逻辑，但都收在同一张卡片语言里。</p>
+      </header>
+
+      <div class="signs-grid">
+        <article class="sign-card anim" style="--d:.05s">
+          <div class="sc-head"><span class="sc-icon">⏰</span><span class="sc-tag">此刻</span></div>
+          <h3>此刻个人运势</h3>
+          <p class="sc-q">「现在适合做什么？」</p>
+          <p class="sc-desc">十二时辰的吉言与提点，叠加当下宜忌；填过生日会附加一条属于你的个人摘要。</p>
+        </article>
+
+        <article class="sign-card anim" style="--d:.11s">
+          <div class="sc-head"><span class="sc-icon">📅</span><span class="sc-tag">今日</span></div>
+          <h3>今日黄历</h3>
+          <p class="sc-q">「今天是什么日子？」</p>
+          <p class="sc-desc">干支年与生肖、宜忌清单、幸运色与幸运数字，再加上今日运势评分和风格文案。</p>
+        </article>
+
+        <article class="sign-card anim" style="--d:.17s">
+          <div class="sc-head"><span class="sc-icon">👤</span><span class="sc-tag">个人</span></div>
+          <h3>今日个人运势</h3>
+          <p class="sc-q">「我今天怎么样？」</p>
+          <p class="sc-desc">从生日推导生肖、星座、八字与五行方位，可在综合命理 / 八字排盘 / 星座性格间切换。</p>
+        </article>
+
+        <article class="sign-card anim" style="--d:.23s">
+          <div class="sc-head"><span class="sc-icon">🔮</span><span class="sc-tag">精灵</span></div>
+          <h3>精灵祈福</h3>
+          <p class="sc-q">「我想再加点运气。」</p>
+          <p class="sc-desc">打开运势精灵面板：查看五项加持、当前方位与今日祈福次数，把运气一点点攒起来。</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ======================= 06 · Agent ======================= -->
+    <section class="slide" data-theme="light" data-title="AI Agent" data-section="AI">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>05 · AI</div>
+        <h2>不是聊天框，是一个会「查资料」的 Agent</h2>
+        <p class="lead">右键球打开对话窗。问题进来先选工具，拿到真实测算结果再组织答案——而不是凭空生成。</p>
+      </header>
+
+      <div class="agent-grid">
+        <div class="chat-card anim" style="--d:.05s">
+          <div class="chat-head"><span class="live-dot"></span>AI 运势对话<span class="mini">多轮 · 工具调用 · 可中断</span></div>
+          <div class="chat-body">
+            <div class="msg me"><div class="bubble">这周哪天适合签合同？</div></div>
+            <div class="msg bot">
+              <div class="tools"><span>🛠 查阅黄历</span><span>🛠 测算时段</span></div>
+              <div class="bubble">周三（11/12）干支为乙巳日，宜「签约、会谈」，是本周最适合落笔的一天。（示意）</div>
+            </div>
+            <div class="msg me"><div class="bubble">那财运呢？顺手帮我祈福。</div></div>
+            <div class="msg bot">
+              <div class="tools"><span>🛠 查看精灵</span><span>🛠 祈福</span></div>
+              <div class="typing"><i></i><i></i><i></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tools-panel anim" style="--d:.12s">
+          <div class="tp-title">内置 7 个工具，Agent 自己决定调哪个</div>
+          <ul class="tool-list">
+            <li><code>get_almanac</code><span>按日期生成黄历、宜忌、幸运色</span></li>
+            <li><code>get_hour_fortune</code><span>此刻时辰吉言 + 个人摘要</span></li>
+            <li><code>get_today_fortune</code><span>今日运势，五种风格可选</span></li>
+            <li><code>get_personal_chart</code><span>综合 / 八字 / 星座命理档案</span></li>
+            <li><code>get_range_fortune</code><span>明日与本周运势</span></li>
+            <li><code>get_spirit_status</code><span>五项加持与今日祈福余量</span></li>
+            <li><code>bless_spirit</code><span>明确要求时为维度祈福 +1</span></li>
+          </ul>
+          <div class="tp-note">➕ 场景注册表：像「按生日分组」这类临时业务，可以动态挂载额外工具，核心代码一行不动。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= 07 · Spirit ======================= -->
+    <section class="slide" data-theme="light" data-title="运势精灵" data-section="精灵">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>06 · 运势精灵</div>
+        <h2>把「风水摆位」变成看得见的加成</h2>
+        <p class="lead">它不是一只需要投喂的宠物，而是一台运势维度加持器：把球停在对应的方位，或者主动祈福。</p>
+      </header>
+
+      <div class="spirit-grid">
+        <div style="position: relative;">
+          <div class="spirit-board anim" style="--d:.05s">
+            <div class="sb-ring"></div>
+            <div class="sb-node sb-tl"><b>水</b><em>综合</em><small>左上</small></div>
+            <div class="sb-node sb-tr"><b>木</b><em>事业</em><small>右上</small></div>
+            <div class="sb-node sb-bl"><b>金</b><em>财运</em><small>左下</small></div>
+            <div class="sb-node sb-br"><b>火</b><em>爱情</em><small>桃花</small></div>
+            <div class="sb-center"><b>土</b><em>健康</em><small>中央</small></div>
+            <div class="sb-ball"></div>
+          </div>
+          <div class="sb-caption">五行 ↔ 方位 ↔ 运势维度：球停在哪，就在补哪一项</div>
+        </div>
+
+        <div class="spirit-right">
+          <div class="rules">
+            <div class="rule anim" style="--d:.08s">
+              <span class="r-num">1</span>
+              <div>
+                <b>摆位加持</b>
+                <p>球在同一方位停留约 <code>5 分钟</code>，对应维度自动 +1，单项凭摆位最多累积到 2。</p>
+              </div>
+            </div>
+            <div class="rule anim" style="--d:.14s">
+              <span class="r-num">2</span>
+              <div>
+                <b>主动祈福</b>
+                <p>在精灵面板指定维度 +1，每天 3 次；单项总上限为 3，跨日自动重置。</p>
+              </div>
+            </div>
+            <div class="rule anim" style="--d:.20s">
+              <span class="r-num">3</span>
+              <div>
+                <b>测运时生效</b>
+                <p>抽签时把加持作为常量叠加到维度分数，并自动兼容「爱情 / 感情」两种字段名。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="boost-card anim" style="--d:.26s">
+            <div class="bc-title"><span>今日加持（示意）</span><small>摆位 + 祈福 · 汇总</small></div>
+            <div class="boost-row"><span>综合</span><div class="boost-track"><i style="width:66%"></i></div><b>2/3</b></div>
+            <div class="boost-row"><span>爱情</span><div class="boost-track"><i style="width:100%"></i></div><b>3/3</b></div>
+            <div class="boost-row"><span>事业</span><div class="boost-track"><i style="width:33%"></i></div><b>1/3</b></div>
+            <div class="boost-row"><span>财运</span><div class="boost-track"><i style="width:0%"></i></div><b>0/3</b></div>
+            <div class="boost-row"><span>健康</span><div class="boost-track"><i style="width:33%"></i></div><b>1/3</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= 08 · Personalization ======================= -->
+    <section class="slide" data-theme="light" data-title="个性化" data-section="个性化">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>07 · 个性化</div>
+        <h2>填一次生日，后面都是「你的」</h2>
+        <p class="lead">生日、性别和系统时区只填一次，之后所有卡片与对话都会带上你的命理上下文。</p>
+      </header>
+
+      <div class="flow-card card anim" style="--d:.05s">
+        <div class="flow">
+          <div class="fnode input">
+            <b>🎂 你的生日</b>
+            <small>+ 性别（可选）<br>+ 系统时区自动获取</small>
+          </div>
+          <div class="farrow">→</div>
+          <div class="fnode">
+            <b>生辰推导</b>
+            <small>生肖 · 星座 · 八字年柱 / 月支 · 五行方位，时区还会映射到「东西南北中」。</small>
+          </div>
+          <div class="farrow">→</div>
+          <div class="fnode out">
+            <b>三种测算形态</b>
+            <small>综合命理档案 · 八字排盘 · 星座性格</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="style-block card anim" style="--d:.13s">
+        <div class="style-head"><b>五种运势风格</b><span>Styles</span></div>
+        <div class="pills">
+          <span>传统中式</span><span>现代简洁</span><span>趣味抽签</span><span>星座塔罗</span><span>个性化推荐</span>
+        </div>
+        <p class="style-note">
+          <b>行为学习：</b>记录每个风格被点击、被阅读的时长，用时间衰减 softmax 自动选出你更常看的那一种；今日 / 此刻 / 明日 / 本周分别缓存，同一天不会重复变来变去。
+        </p>
+      </div>
+    </section>
+
+    <!-- ======================= 09 · Architecture ======================= -->
+    <section class="slide" data-theme="light" data-title="技术架构" data-section="技术">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>08 · 技术</div>
+        <h2>克制的技术栈，够用的架构</h2>
+        <p class="lead">没有前端框架、没有打包器：Electron 主进程 + 原生 HTML/CSS/JS，渲染层只通过 preload 白名单与主进程通信。</p>
+      </header>
+
+      <div class="stat-row">
+        <div class="stat anim" style="--d:.04s"><b>2</b><span>运行时依赖（Electron + electron-store）</span></div>
+        <div class="stat anim" style="--d:.09s"><b>5</b><span>透明无边框窗口</span></div>
+        <div class="stat anim" style="--d:.14s"><b>0</b><span>前端框架 / 打包器</span></div>
+        <div class="stat anim" style="--d:.19s"><b>130+</b><span>单元烟雾测试</span></div>
+      </div>
+
+      <div class="arch anim" style="--d:.23s">
+        <div class="arch-layer">
+          <div class="al-label">渲染层</div>
+          <div class="al-boxes">
+            <span>ball 悬浮球</span><span>card 运势卡片</span><span>petPanel 精灵面板</span><span>settings 设置</span><span>aiInput 对话窗</span>
+          </div>
+        </div>
+        <div class="arch-bridge">preload · contextBridge 白名单 IPC ↕</div>
+        <div class="arch-layer main">
+          <div class="al-label">主进程</div>
+          <div class="al-boxes">
+            <span>窗口 / 托盘 / 快捷键</span><span>IPC 路由</span><span>electron-store 持久化</span><span>精灵摆位定时器</span><span>net.fetch 调模型</span>
+          </div>
+        </div>
+        <div class="arch-mods">
+          fortune.js · agent.js · ai.js · localLLM.js · logger.js · watcher.js · detector.js · selfCheck.js
+        </div>
+        <div class="run-strip">
+          <div><b>npm start</b><span>开发运行</span></div>
+          <div><b>npm run start:hidden</b><span>后台启动（自启用）</span></div>
+          <div><b>npm run build:local</b><span>Windows NSIS 安装包</span></div>
+          <div><b>node smoke-test.js</b><span>无需 GUI 的单元测试</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= 10 · Trust ======================= -->
+    <section class="slide" data-theme="light" data-title="稳定与隐私" data-section="工程">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>09 · 工程</div>
+        <h2>离线优先，失败静默，出问题会自己诊断</h2>
+        <p class="lead">AI 是增强项，不是前置条件——没有网络、没有 Key，内置的黄历与抽签依然完整可用。</p>
+      </header>
+
+      <div class="trust-grid">
+        <article class="trust-card card anim" style="--d:.05s">
+          <div class="tc-icon">🧠</div>
+          <h3>模型可选</h3>
+          <p>线上默认 DeepSeek，兼容任意 OpenAI 协议的 Chat Completions 端点；本机装了 Ollama 时优先走本地模型，数据不出机器。</p>
+        </article>
+        <article class="trust-card card anim" style="--d:.11s">
+          <div class="tc-icon">🔒</div>
+          <h3>隐私边界</h3>
+          <p>API Key 只存在本机 <code>%APPDATA%/fortune-ball/config.json</code>，界面只显示打码片段；源码与 git 仓库不含密钥，日志自动打码 token。</p>
+        </article>
+        <article class="trust-card card anim" style="--d:.17s">
+          <div class="tc-icon">🩺</div>
+          <h3>自愈链路</h3>
+          <p>结构化日志（5MB × 10 轮转）→ watcher 捕获错误 → detector 分类 → AI 诊断并系统通知；启动时还会跑 7 项自检。</p>
+        </article>
+      </div>
+
+      <div class="chip-row anim" style="--d:.23s">
+        <span>托盘常驻</span>
+        <span>开机自启（安装包模式）</span>
+        <span>Ctrl + Alt + F 全局抽签</span>
+        <span>卡片失焦自动收起</span>
+        <span>AI 失败静默降级</span>
+        <span>今日 / 明日 / 本周缓存</span>
+      </div>
+    </section>
+
+    <!-- ======================= 11 · Roadmap ======================= -->
+    <section class="slide" data-theme="light" data-title="路线图" data-section="下一步">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>10 · 下一步</div>
+        <h2>接下来的五个方向</h2>
+        <p class="lead">从「看运势」走向「调运势」：让位置、信息与诉求都成为可用的输入。</p>
+      </header>
+
+      <div class="roadmap-grid">
+        <div class="road-list">
+          <div class="road-item anim" style="--d:.04s">
+            <span class="r-index">01</span>
+            <div><b>位置即运势</b><p>球放在哪，就补哪一项；可配置「位置 → 提升维度」的映射。</p></div>
+          </div>
+          <div class="road-item anim" style="--d:.09s">
+            <span class="r-index">02</span>
+            <div><b>多信息推断</b><p>从单一日期推算，扩展到生日、性别、位置等多源信息的综合推断。</p></div>
+          </div>
+          <div class="road-item anim" style="--d:.14s">
+            <span class="r-index">03</span>
+            <div><b>诉求驱动建议</b><p>说出你的诉求，由 Agent 给出可执行的调整方案，而不只是一段解读。</p></div>
+          </div>
+          <div class="road-item anim" style="--d:.19s">
+            <span class="r-index">04</span>
+            <div><b>天气与地理</b><p>接入天气和城市位置，让黄历与提示更贴近你所在的地方。</p></div>
+          </div>
+          <div class="road-item anim" style="--d:.24s">
+            <span class="r-index">05</span>
+            <div><b>分类提升 / 一键提升</b><p>按维度逐项提升，也支持一次性把好运拉满。</p></div>
+          </div>
+        </div>
+
+        <aside class="road-aside anim" style="--d:.16s">
+          <h4>还会看</h4>
+          <ul>
+            <li>精确农历：月日、节气、吉神凶煞</li>
+            <li>运势卡片分享</li>
+            <li>历史运势回顾</li>
+            <li>精灵多轮对话</li>
+            <li>皮肤 / 主题换装</li>
+            <li>多显示器适配</li>
+          </ul>
+          <div class="aside-foot">已经具备：黄历整合 · 个人测算 · 运势精灵 · 多轮 AI 对话 · 离线降级 · 日志自诊断。</div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ======================= 12 · Closing ======================= -->
+    <section class="slide closing" data-theme="dark" data-title="结尾" data-section="结尾">
+      <div class="end-ball anim"></div>
+      <h2 class="anim" style="--d:.06s">球在，<span class="grad">运气就在。</span></h2>
+      <p class="end-sub anim" style="--d:.12s">
+        今日运势 · 桌面悬浮球 &nbsp;v1.0.1<br>
+        一枚安静待在桌角的小球，随时准备回答你的今天。
+      </p>
+      <div class="end-commands anim" style="--d:.18s">
+        <code><b>npm start</b> · 开发运行</code>
+        <code><b>npm run build:local</b> · 打包安装包</code>
+      </div>
+      <div class="end-meta anim" style="--d:.24s">
+        <span>github.com/CQL111/desktop-icon</span>
+        <span>README.md</span>
+        <span>AGENTS.md</span>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ======================= HUD ======================= -->
+<div class="hud">
+  <button id="prev" aria-label="上一页" title="上一页（←）">‹</button>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="下一页" title="下一页（→）">›</button>
+</div>
+<div class="counter" id="counter"><b>01</b> / 12</div>
+<div class="keys-hint">← → 翻页 · F 全屏 · Home / End</div>
+
+<script>
+(function () {
+  var stage   = document.querySelector('.stage');
+  var slides  = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var dotsBox = document.getElementById('dots');
+  var counter = document.getElementById('counter');
+  var bar     = document.getElementById('progress-bar');
+  var prevBtn = document.getElementById('prev');
+  var nextBtn = document.getElementById('next');
+  var current = 0;
+
+  // ---- fit-to-viewport ----
+  function resize() {
+    var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    stage.style.transform = 'scale(' + s + ')';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---- build dots ----
+  slides.forEach(function (slide, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.title = slide.getAttribute('data-title') || ('第 ' + (i + 1) + ' 页');
+    b.setAttribute('aria-label', b.title);
+    b.addEventListener('click', function () { go(i); });
+    dotsBox.appendChild(b);
+  });
+  var dots = Array.prototype.slice.call(dotsBox.children);
+
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+
+  function render() {
+    slides.forEach(function (s, i) {
+      var on = i === current;
+      s.classList.toggle('active', on);
+      s.setAttribute('aria-hidden', on ? 'false' : 'true');
+    });
+    dots.forEach(function (d, i) { d.classList.toggle('on', i === current); });
+    counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + pad(slides.length);
+    bar.style.width = ((current + 1) / slides.length * 100).toFixed(2) + '%';
+    try {
+      history.replaceState(null, '', '#' + (current + 1));
+    } catch (e) { /* file:// 下可能受限，忽略 */ }
+  }
+
+  function go(i) {
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    render();
+  }
+  function next() { go(current + 1); }
+  function prev() { go(current - 1); }
+
+  prevBtn.addEventListener('click', prev);
+  nextBtn.addEventListener('click', next);
+
+  // ---- keyboard ----
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+      case 'PageDown':
+      case ' ':
+      case 'Enter':
+        e.preventDefault(); next(); break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+      case 'PageUp':
+      case 'Backspace':
+        e.preventDefault(); prev(); break;
+      case 'Home': e.preventDefault(); go(0); break;
+      case 'End':  e.preventDefault(); go(slides.length - 1); break;
+      case 'f': case 'F':
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function () {});
+        else document.exitFullscreen().catch(function () {});
+        break;
+      default:
+        if (/^[1-9]$/.test(e.key)) go(parseInt(e.key, 10) - 1);
+    }
+  });
+
+  // ---- wheel (debounced) ----
+  var wheelLock = false;
+  window.addEventListener('wheel', function (e) {
+    if (wheelLock || Math.abs(e.deltaY) < 36) return;
+    wheelLock = true;
+    if (e.deltaY > 0) next(); else prev();
+    setTimeout(function () { wheelLock = false; }, 680);
+  }, { passive: true });
+
+  // ---- touch swipe ----
+  var touchX = null, touchY = null;
+  window.addEventListener('touchstart', function (e) {
+    if (!e.changedTouches.length) return;
+    touchX = e.changedTouches[0].clientX;
+    touchY = e.changedTouches[0].clientY;
+  }, { passive: true });
+  window.addEventListener('touchend', function (e) {
+    if (touchX === null) return;
+    var dx = e.changedTouches[0].clientX - touchX;
+    var dy = e.changedTouches[0].clientY - touchY;
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) next(); else prev();
+    }
+    touchX = touchY = null;
+  }, { passive: true });
+
+  // ---- deep link #n ----
+  var hashN = parseInt((location.hash || '').replace('#', ''), 10);
+  current = (hashN >= 1 && hashN <= slides.length) ? hashN - 1 : 0;
+  render();
+})();
+</script>
+</body>
+</html>

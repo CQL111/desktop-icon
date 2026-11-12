@@ -22,6 +22,30 @@ function setBusy(b) {
   if (b) setStatus('info', '✨ 思考中…');
 }
 
+// 典籍出处：小标签列表，点击展开原文
+function renderCitations(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const box = document.createElement('div');
+  box.className = 'citations';
+  const title = document.createElement('div');
+  title.className = 'citations-title';
+  title.textContent = '📚 典籍出处';
+  box.appendChild(title);
+  for (const c of list) {
+    const item = document.createElement('details');
+    item.className = 'citation';
+    const sum = document.createElement('summary');
+    sum.textContent = `《${c.ref.replace('·', '·')}》`;
+    const body = document.createElement('p');
+    body.textContent = c.text || '';
+    item.appendChild(sum);
+    item.appendChild(body);
+    box.appendChild(item);
+  }
+  messagesEl.appendChild(box);
+  scrollToEnd();
+}
+
 function scrollToEnd() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -90,9 +114,14 @@ async function submit() {
     const result = await window.api.aiInterpretAsk({ query: q });
     if (!result.ok) {
       window.logger.warn('aiInput.submit', `failed: ${result.error}`);
+      // 主进程通常已经通过 onAiInputError 推送了具体原因；
+      // 这里补一个兜底，避免浮窗看起来像卡住
+      setStatus('error', friendlyInputError(result.error));
     } else if (result.text) {
       appendMsg('assistant', result.text);
-      setStatus('', '');
+      renderCitations(result.citations);
+      if (result.notice) setStatus('info', '⚠️ ' + result.notice);
+      else setStatus('', '');
       window.logger.info('aiInput.submit', 'done');
     }
   } catch (e) {
@@ -102,6 +131,18 @@ async function submit() {
     setBusy(false);
     queryEl.focus();
   }
+}
+
+function friendlyInputError(code) {
+  return {
+    NO_TOKEN: '尚未配置 API Key，请先在设置里填写',
+    AUTH_FAILED: 'API Key 无效或已过期，请到设置里更新',
+    RATE_LIMITED: '调用太频繁，请稍后再试',
+    TIMEOUT: '网络有点慢，稍后再试',
+    NETWORK: '网络似乎不太稳定',
+    EMPTY_QUERY: '请输入想问的内容',
+    AGENT_MAX_STEPS: '这轮调用太长，请换个说法再问',
+  }[code] || ('请求失败：' + (code || '未知错误'));
 }
 
 window.api.onAiInputFocus((data) => {

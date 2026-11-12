@@ -1,0 +1,60 @@
+/* tokens.css - 全应用统一设计变量（深紫夜空 · 暗色玻璃） */
+:root {
+  /* 底色 / 表面 */
+  --bg-0: #141019;
+  --bg-1: #1d1522;
+  --bg-panel: rgba(30, 21, 38, 0.92);
+  --glass-1: rgba(255, 255, 255, 0.06);
+  --glass-2: rgba(255, 255, 255, 0.09);
+  --glass-3: rgba(255, 255, 255, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-hairline: rgba(255, 255, 255, 0.08);
+
+  /* 文字 */
+  --text-1: #f4eef5;
+  --text-2: #b9a8bf;
+  --text-3: #8c7a94;
+
+  /* 强调色 */
+  --accent-rose: #ff8aa3;
+  --accent-rose-soft: rgba(255, 138, 163, 0.16);
+  --accent-gold: #fcd34d;
+  --accent-gold-soft: rgba(252, 211, 77, 0.14);
+  --accent-gradient: linear-gradient(135deg, #ff8aa3, #fcd34d);
+  --text-on-accent: #2a1220;
+
+  /* 语义色 */
+  --success: #6cd49a;
+  --success-bg: rgba(108, 212, 154, 0.12);
+  --danger: #ff8a8a;
+  --danger-bg: rgba(255, 138, 138, 0.12);
+  --info: #b3a7ff;
+  --info-bg: rgba(179, 167, 255, 0.12);
+  --warning: #ffb347;
+
+  /* 形状 / 阴影 / 模糊 */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --r-pill: 999px;
+  --shadow-card: 0 18px 50px rgba(4, 2, 10, 0.65);
+  --shadow-panel: 0 16px 50px rgba(4, 2, 10, 0.6);
+  --shadow-float: 0 12px 40px rgba(4, 2, 10, 0.55);
+  --shadow-gold-ring: 0 0 0 1px rgba(252, 211, 77, 0.35), 0 18px 50px rgba(4, 2, 10, 0.65);
+  --glow-rose: 0 0 24px rgba(255, 138, 163, 0.35);
+  --ring-focus: 0 0 0 3px rgba(255, 138, 163, 0.25);
+  --blur-sm: 8px;
+  --blur-md: 14px;
+  --blur-lg: 20px;
+
+  /* 字体 / 动效 */
+  --font-sans: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --font-display: 'STKaiti', 'KaiTi', '楷体', serif;
+  --font-mono: 'Cascadia Code', Consolas, monospace;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 0.18s;
+  --dur-base: 0.32s;
+  --dur-slow: 0.5s;
+}

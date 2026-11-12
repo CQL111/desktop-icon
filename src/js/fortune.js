@@ -8,6 +8,7 @@ const colors = require('./data/colors');
 const quotes = require('./data/quotes');
 const hourGuidance = require('./data/hourGuidance');
 const persona = require('./data/persona');
+const almanac = require('./almanac');
 const logger = require('./logger');
 
 // ---------- 种子化随机数 ----------
@@ -33,6 +34,12 @@ function mulberry32(seed) {
 
 function makeRng(seedKey) {
   return mulberry32(hashSeed(seedKey));
+}
+
+// 本机 installId 进种子；缺省时行为和旧版一致（便于单测）
+function idPart(ctx) {
+  const id = ctx && typeof ctx.installId === 'string' ? ctx.installId.trim() : '';
+  return id ? `|${id}` : '';
 }
 
 function pickN(rng, arr, n) {
@@ -262,7 +269,7 @@ function genPersonalized(rng, ctx) {
 // ---------- 主入口 ----------
 function generate(style, ctx) {
   const dateKey = ctx.dateKey;
-  const seedKey = `${style}|${dateKey}`;
+  const seedKey = `${style}|${dateKey}${idPart(ctx)}`;
   logger.info('fortune.generate', `style=${style} dateKey=${dateKey}`);
   const rng = makeRng(seedKey);
   switch (style) {
@@ -335,7 +342,7 @@ function genHourFortune(ctx) {
   logger.info('fortune.moment', `hourKey=${ctx.hourKey || 'auto'}`);
   const hourKey = ctx.hourKey || getCurrentHourKey();
   const info = getHourInfo(hourKey);
-  const seedKey = `${ctx.dateKey}|${hourKey}`;
+  const seedKey = `${ctx.dateKey}|${hourKey}${idPart(ctx)}`;
   const rng = makeRng(seedKey);
   const luckyWord = pick(rng, quotes);
   const guidance = pick(rng, info.guidance);
@@ -379,7 +386,7 @@ function genHourFortune(ctx) {
 // scope=tomorrow：明日（复用 modern 结构 + hint）
 function genTomorrowFortune(ctx) {
   logger.info('fortune.tomorrow', `dateKey=${ctx.dateKey}`);
-  const seedKey = `modern|${ctx.dateKey}`;
+  const seedKey = `modern|${ctx.dateKey}${idPart(ctx)}`;
   const rng = makeRng(seedKey);
   const base = genModern(rng, ctx);
   const hints = [
@@ -402,7 +409,7 @@ function genTomorrowFortune(ctx) {
 // scope=week：本周 7 天
 function genWeekFortune(ctx) {
   logger.info('fortune.week', `dateKey=${ctx.dateKey}`);
-  const rng = makeRng(`week|${ctx.dateKey}`);
+  const rng = makeRng(`week|${ctx.dateKey}${idPart(ctx)}`);
   const today = new Date(ctx.dateKey);
   // 找到本周一
   const dow = today.getDay() || 7; // 周日=0 → 转成 7
@@ -458,24 +465,55 @@ function genWeekFortune(ctx) {
 // ---------- 今日黄历 ----------
 function genAlmanac(ctx) {
   const dateKey = ctx.dateKey;
-  const [y] = String(dateKey).split('-').map(Number);
+  // 真黄历：农历 / 节气 / 日干支 / 建除 / 冲煞 / 吉时（离线计算，见 almanac.js）
+  let real = null;
+  try {
+    real = almanac.getDay(dateKey);
+  } catch (e) {
+    // 计算失败时回退到旧的近似实现
+    real = null;
+  }
+  if (real) {
+    return {
+      style: 'almanac',
+      styleLabel: '今日黄历',
+      date: dateKey,
+      // 旧字段（卡片与缓存兼容）
+      yearGanzhi: real.yearGanzhi,
+      shengxiao: real.shengxiao,
+      yi: real.yi,
+      ji: real.ji,
+      luckyColor: real.luckyColor,
+      luckyNum: real.luckyNum,
+      // 新增：真黄历字段
+      lunarText: real.lunarText,
+      lunar: real.lunar,
+      term: real.term,
+      monthGanzhi: real.monthGanzhi,
+      dayGanzhi: real.dayGanzhi,
+      jianchu: real.jianchu,
+      huangdao: real.huangdao,
+      huangdaoText: real.huangdaoText,
+      chong: real.chong,
+      pengzu: real.pengzu,
+      luckyHours: real.luckyHours,
+      wuxing: real.wuxing,
+      yiJiNote: real.yiJiNote,
+    };
+  }
+  // ---- 兼容回退（旧版近似）----
   const rng = makeRng(`almanac|${dateKey}`);
-  const yearGanzhi = persona.getYearGanzhi(y);     // '甲辰'
-  const shengxiao = persona.getShengxiao(y);        // '龙'
-  const yi = pickN(rng, yiji.yi, 3);
-  const ji = pickN(rng, yiji.ji, 3);
-  const luckyColor = pick(rng, colors.lucky);
-  const luckyNum = 1 + Math.floor(rng() * 9);
+  const [y] = String(dateKey).split('-').map(Number);
   return {
     style: 'almanac',
     styleLabel: '今日黄历',
     date: dateKey,
-    yearGanzhi,
-    shengxiao,
-    yi,
-    ji,
-    luckyColor,
-    luckyNum,
+    yearGanzhi: persona.getYearGanzhi(y),
+    shengxiao: persona.getShengxiao(y),
+    yi: pickN(rng, yiji.yi, 3),
+    ji: pickN(rng, yiji.ji, 3),
+    luckyColor: pick(rng, colors.lucky),
+    luckyNum: 1 + Math.floor(rng() * 9),
   };
 }
 

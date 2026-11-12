@@ -64,7 +64,8 @@ function formatSize(bytes) {
   return mb.toFixed(0) + ' MB';
 }
 
-// 下载模型（Ollama pull，长操作）
+// 下载模型（Ollama pull 是流式 NDJSON，响应结束时才代表下载完成；
+// 只等响应头会在模型还没下完时误报成功）
 async function pullModel(name) {
   if (!name || !name.trim()) return { ok: false, error: 'EMPTY_NAME' };
   try {
@@ -73,7 +74,19 @@ async function pullModel(name) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name.trim() }),
     });
-    return { ok: resp.ok, error: resp.ok ? null : `HTTP_${resp.status}` };
+    if (!resp.ok) return { ok: false, error: `HTTP_${resp.status}` };
+    // net.fetch 没有 body 时直接结束
+    if (!resp.body) return { ok: true, error: null };
+    const reader = resp.body.getReader();
+    try {
+      while (true) {
+        const { done } = await reader.read();
+        if (done) break;
+      }
+    } finally {
+      try { reader.releaseLock(); } catch {}
+    }
+    return { ok: true, error: null };
   } catch (e) {
     return { ok: false, error: String(e.message || e) };
   }

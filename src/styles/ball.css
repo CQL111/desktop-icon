@@ -1,4 +1,4 @@
-/* ball.css - 悬浮球样式 */
+/* ball.css - 悬浮球样式（深紫夜空 · 水晶球 + 星轮菜单） */
 
 * {
   margin: 0;
@@ -14,240 +14,457 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-app-region: no-drag;
-  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-family: var(--font-sans);
   /* 关键：body 整层点击穿透，让桌面应用能正常接收鼠标事件 */
   pointer-events: none;
 }
 
+/* ---------- 水晶球 ---------- */
+/* ---------- 团子猫（安静型桌宠） ---------- */
 .ball {
-  /* 关键：球本身可以点击；由 JS 控制位置（CSS transform） */
+  /* 位置仍由 JS 写内联 translate；本体是透明容器，猫是 SVG */
   position: absolute;
   top: 0;
   left: 0;
   width: 80px;
   height: 80px;
-  border-radius: 50%;
-  cursor: pointer;
+  cursor: grab;
   pointer-events: auto;
   -webkit-user-select: none;
   user-select: none;
-  /* 颜色由 JS 通过 CSS 变量注入；默认粉色作为兜底 */
-  background: radial-gradient(
-    circle at 35% 30%,
-    var(--ball-light, #fff5f8) 0%,
-    var(--ball-mid, #ffc6d5) 40%,
-    var(--ball-dark, #ff8aa3) 100%
-  );
-  box-shadow:
-    0 6px 16px var(--ball-shadow, rgba(255, 100, 130, 0.35)),
-    inset 0 -4px 8px rgba(0, 0, 0, 0.15),
-    inset 0 4px 8px rgba(255, 255, 255, 0.5);
-  transition:
-    box-shadow 0.15s ease,
-    background 0.6s ease;
-  /* transform 不在这里 transition，避免和动画的 transform 冲突 */
+  background: transparent;
   overflow: visible;
   z-index: 1;
+  /* 毛色：跟随抽签幸运色（setColor 注入 --ball-*） */
+  --fur: color-mix(in srgb, var(--ball-mid, #c9a7ff) 52%, #2a1b33);
+  --fur-dark: color-mix(in srgb, var(--ball-dark, #b39ddb) 40%, #1c1024);
+  --fur-light: color-mix(in srgb, var(--ball-light, #e6dcff) 70%, #3a2450);
+  --ink: #fff6fa;
+  transition: filter var(--dur-base) ease;
 }
-
 .ball:hover {
-  box-shadow:
-    0 8px 20px var(--ball-shadow, rgba(255, 100, 130, 0.45)),
-    inset 0 -4px 8px rgba(0, 0, 0, 0.15),
-    inset 0 4px 8px rgba(255, 255, 255, 0.5);
+  filter: drop-shadow(0 0 10px rgba(252, 211, 77, 0.35));
+}
+.ball.grabbing { cursor: grabbing; }
+.ball.grabbing .pet-figure { transform: translateY(-2px) rotate(-2deg); }
+
+/* 脚下柔光（颜色随幸运色） */
+.pet-glow {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 62px;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    color-mix(in srgb, var(--ball-mid, #ffc6d5) 45%, transparent) 0%,
+    transparent 70%);
+  filter: blur(2px);
+  transition: opacity var(--dur-base) ease, transform var(--dur-base) ease;
+}
+.ball.charging .pet-glow { animation: glowPulse 1.1s ease-in-out infinite alternate; }
+@keyframes glowPulse {
+  from { opacity: 0.5; transform: translateX(-50%) scale(0.9); }
+  to   { opacity: 1;   transform: translateX(-50%) scale(1.25); }
 }
 
-/* :active 用 box-shadow 而不是 transform，避免和位置的 translate 冲突 */
-.ball:active {
-  box-shadow:
-    0 4px 10px var(--ball-shadow, rgba(255, 100, 130, 0.5)),
-    inset 0 -4px 8px rgba(0, 0, 0, 0.15),
-    inset 0 4px 8px rgba(255, 255, 255, 0.5);
-}
-
+/* ---------- 桌面形象（可切换：猫 / 狗 / 财神 / 签筒） ---------- */
 .ball-inner {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.face {
-  width: 70%;
-  height: 70%;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  position: absolute;
-}
-
-.face-laugh, .face-smile, .face-neutral, .face-cry {
-  opacity: 0;
-  transform: scale(0.8);
-}
-
-.ball-inner[data-mood="laugh"] .face-laugh {
-  opacity: 1;
-  transform: scale(1);
-}
-.ball-inner[data-mood="smile"] .face-smile {
-  opacity: 1;
-  transform: scale(1);
-}
-.ball-inner[data-mood="neutral"] .face-neutral {
-  opacity: 1;
-  transform: scale(1);
-}
-.ball-inner[data-mood="cry"] .face-cry {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* 高光 */
-.ball-shine {
-  position: absolute;
-  top: 8%;
-  left: 18%;
-  width: 28%;
-  height: 22%;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
   pointer-events: none;
+  /* 抽签缩没/弹出朝脚下收缩 */
+  transform-origin: 50% 88%;
+  z-index: 1;
+  /* 通用配色：具体形象在下面覆写 */
+  --fur: color-mix(in srgb, var(--ball-mid, #c9a7ff) 52%, #2a1b33);
+  --fur-dark: color-mix(in srgb, var(--ball-dark, #b39ddb) 40%, #1c1024);
+  --fur-light: color-mix(in srgb, var(--ball-light, #e6dcff) 70%, #3a2450);
+  --ink: #fff6fa;
+}
+.pet-figure {
+  display: none;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 5px 8px rgba(4, 2, 10, 0.45));
+  transition: transform var(--dur-base) var(--ease-spring), filter var(--dur-base) ease;
+}
+.ball-inner[data-persona="cat"] .persona-cat,
+.ball-inner[data-persona="dog"] .persona-dog,
+.ball-inner[data-persona="caishen"] .persona-caishen,
+.ball-inner[data-persona="lots"] .persona-lots { display: block; }
+
+/* 身体与地面 */
+.pet-ground {
+  fill: rgba(8, 3, 14, 0.28);
+  filter: blur(1.5px);
+}
+.pet-torso {
+  fill: var(--fur);
+  transform-box: fill-box;
+  transform-origin: 50% 95%;
+  animation: petBreath 4.2s ease-in-out infinite;
+}
+.pet-belly {
+  fill: var(--fur-light);
+  opacity: 0.55;
+  transform-box: fill-box;
+  transform-origin: 50% 95%;
+  animation: petBreath 4.2s ease-in-out infinite;
+}
+@keyframes petBreath {
+  0%, 100% { transform: scale(1, 1); }
+  50%      { transform: scale(1.006, 1.018); }
 }
 
-/* 点击弹出动画 */
-@keyframes bounce {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.2); }
+/* 耳朵（猫 / 狗） */
+.pet-ear-l { transform-origin: 36px 26px; }
+.pet-ear-r { transform-origin: 44px 26px; }
+.pet-ear {
+  transform-box: view-box;
+  transition: transform var(--dur-base) var(--ease-spring);
+}
+.pet-ear-outer { fill: var(--fur); }
+.pet-ear-inner { fill: var(--fur-light); opacity: 0.7; }
+.ball:hover .pet-ear-l { transform: rotate(-5deg); }
+.ball:hover .pet-ear-r { transform: rotate(5deg); }
+
+/* 尾巴（猫 / 狗） */
+.pet-tail {
+  transform-box: view-box;
+  transform-origin: 58px 66px;
+  animation: petTailSway 3.6s ease-in-out infinite;
+  transition: transform var(--dur-base) ease;
+}
+.pet-tail-outer {
+  fill: none;
+  stroke: var(--fur);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+.pet-tail-tip {
+  fill: none;
+  stroke: var(--fur-light);
+  stroke-width: 8;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+@keyframes petTailSway {
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate(5deg); }
+}
+.ball:hover .pet-tail { animation-duration: 2.1s; }
+
+/* 面部：闭眼弧（开心/难过两组切换）+ 小嘴 + 腮红 */
+.pet-eye {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: opacity var(--dur-base) ease;
+}
+.pet-eye-sad { opacity: 0; }
+.pet-mouth {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+.pet-blush { fill: color-mix(in srgb, var(--accent-rose) 60%, transparent); opacity: 0.4; }
+
+/* 偶尔眯眼 */
+.pet-face {
+  transform-box: fill-box;
+  transform-origin: 50% 52%;
+  animation: petBlink 7.4s ease-in-out infinite;
+}
+@keyframes petBlink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(1.14); }
+}
+
+/* ---------- 各形象专属 ---------- */
+/* 狗：耳朵更直立、尾巴卷得更紧、毛色偏暖 */
+.persona-dog { --fur: color-mix(in srgb, var(--ball-mid, #f0c69a) 55%, #4a3320); --fur-light: color-mix(in srgb, var(--ball-light, #fff0dc) 75%, #6b5238); }
+.persona-dog .pet-ear-l { transform-origin: 33px 25px; }
+.persona-dog .pet-ear-r { transform-origin: 47px 25px; }
+.persona-dog .pet-tail { transform-origin: 62px 52px; }
+.persona-dog .pet-tail-outer { stroke-width: 7; }
+.persona-dog .pet-tail-tip { stroke-width: 7; }
+
+/* 财神：红袍、金帽、金元宝、白胡子 */
+.persona-caishen {
+  --ink: #3a1a10;
+  --robe: #a3273a;
+  --robe-dark: #7a1628;
+  --gold: #fcd34d;
+}
+.persona-caishen .pet-robe {
+  fill: url(#none);
+  fill: var(--robe);
+  transform-box: fill-box;
+  transform-origin: 50% 95%;
+  animation: petBreath 4.6s ease-in-out infinite;
+}
+.persona-caishen .pet-head { fill: #ffd9b8; }
+.persona-caishen .pet-hat { fill: #2a1b33; }
+.persona-caishen .pet-hat-bead { fill: var(--gold); }
+.persona-caishen .pet-beard { fill: #f4efe8; opacity: 0.92; }
+.persona-caishen .pet-ingot path { fill: var(--gold); stroke: #b8860b; stroke-width: 1; }
+.persona-caishen .pet-ingot ellipse { fill: #ffe58a; opacity: 0.8; }
+.persona-caishen .pet-blush { opacity: 0.55; }
+
+/* 签筒：木筒 + 金箍 + 签条 */
+.persona-lots {
+  --ink: #fff6fa;
+  --wood: #8a5433;
+  --wood-dark: #6b3f25;
+  --gold: #fcd34d;
+}
+.persona-lots .pet-tube {
+  fill: var(--wood);
+  transform-box: fill-box;
+  transform-origin: 50% 95%;
+  animation: petBreath 4.6s ease-in-out infinite;
+}
+.persona-lots .pet-tube-band { fill: var(--gold); opacity: 0.9; }
+.persona-lots .pet-sticks rect { fill: #f3d9a4; }
+.persona-lots .pet-sticks .pet-stick-tip { fill: #d94a4a; }
+.persona-lots .pet-blush { opacity: 0.3; }
+
+/* 情绪：耳朵/尾巴/毛色/眼睛 */
+.ball-inner[data-mood="laugh"] .pet-ear-l { transform: rotate(-9deg); }
+.ball-inner[data-mood="laugh"] .pet-ear-r { transform: rotate(9deg); }
+.ball-inner[data-mood="laugh"] .pet-tail { transform: rotate(10deg); animation-duration: 2.4s; }
+.ball-inner[data-mood="laugh"] { --ink: #fff2d8; --fur: color-mix(in srgb, var(--ball-mid, #ffd1a1) 55%, #3a2410); }
+.ball-inner[data-mood="neutral"] .pet-ear-l { transform: rotate(7deg); }
+.ball-inner[data-mood="neutral"] .pet-ear-r { transform: rotate(-7deg); }
+.ball-inner[data-mood="neutral"] .pet-tail { animation-duration: 5s; }
+.ball-inner[data-mood="neutral"] { --ink: #efe6f6; --fur: color-mix(in srgb, var(--ball-mid, #b3a7ff) 42%, #241a33); }
+.ball-inner[data-mood="cry"] .pet-ear-l { transform: rotate(20deg); }
+.ball-inner[data-mood="cry"] .pet-ear-r { transform: rotate(-20deg); }
+.ball-inner[data-mood="cry"] .pet-tail { animation-duration: 7s; transform: rotate(-8deg); }
+.ball-inner[data-mood="cry"] .pet-eye-happy { opacity: 0; }
+.ball-inner[data-mood="cry"] .pet-eye-sad { opacity: 1; }
+.ball-inner[data-mood="cry"] .pet-blush { opacity: 0.12; }
+.ball-inner[data-mood="cry"] { --ink: #d9dcff; --fur: color-mix(in srgb, var(--ball-mid, #8c9dff) 38%, #1a1c33); }
+.ball-inner[data-mood="laugh"] .pet-blush { opacity: 0.45; }
+/* 财神/签筒没有耳朵尾巴：用整体明暗表达情绪 */
+.ball-inner[data-mood="laugh"] .pet-figure { filter: drop-shadow(0 6px 10px rgba(4,2,10,.45)) brightness(1.08); }
+.ball-inner[data-mood="cry"] .pet-figure { filter: drop-shadow(0 4px 6px rgba(4,2,10,.5)) saturate(.72) brightness(.88); }
+
+/* ---------- 抽签粒子动画 ---------- */
+/* 画布覆盖全屏、不拦截鼠标（球窗口的点击穿透由主进程轮询控制） */
+.fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+}
+.fx.active { opacity: 1; }
+
+/* 球被粒子取代后隐藏本体；opacity 不影响位置 transform */
+.ball.hidden { opacity: 0; }
+
+/* 汇聚完成：球从粒子中心弹出来 */
+.ball.reveal-in .ball-inner { animation: ballRevealIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes ballRevealIn {
+  0%   { transform: scale(0.25); }
+  55%  { transform: scale(1.14); }
   100% { transform: scale(1); }
 }
-.ball.bouncing {
-  animation: bounce 0.35s ease;
+
+/* 粒子爆发开始时球体瞬间缩没（被粒子接管） */
+.ball.vanishing .ball-inner { animation: ballVanish 0.2s ease-in both; }
+@keyframes ballVanish {
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.15); opacity: 0; }
 }
 
-/* 呼吸感（应用在 ball-inner 上，避免和 .ball 的位置 transform 冲突） */
-@keyframes breath {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.02); }
-}
-.ball.idle .ball-inner {
-  animation: breath 3s ease-in-out infinite;
-}
 
-/* 中心爆炸：scale 弹跳（在 .ball-inner 上跑，不动 .ball 的位置 translate） */
-@keyframes explode {
-  0%   { transform: scale(1); }
-  35%  { transform: scale(1.7); }
-  60%  { transform: scale(1.15); }
-  80%  { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-.ball.exploding .ball-inner {
-  animation: explode 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
 
-@keyframes flashBurst {
-  0%   { opacity: 0;    transform: scale(0.4); }
-  20%  { opacity: 0.95; transform: scale(1); }
-  100% { opacity: 0;    transform: scale(2.6); }
-}
-.ball-flash {
+/* ---------- 抽签蓄力光晕 ---------- */
+.ball-halo {
   position: absolute;
-  inset: -60%;
+  inset: -14px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(255, 220, 200, 0.5) 30%,
-    rgba(255, 255, 255, 0) 70%
-  );
   pointer-events: none;
   opacity: 0;
-  z-index: 10;
+  z-index: 0;
+  background: radial-gradient(circle, rgba(249, 168, 212, 0.42) 0%, rgba(252, 211, 77, 0.16) 45%, rgba(255, 255, 255, 0) 70%);
 }
-.ball.exploding .ball-flash {
-  animation: flashBurst 0.5s ease-out;
+.ball.charging .ball-halo {
+  opacity: 1;
+  background: radial-gradient(circle, rgba(252, 211, 77, 0.5) 0%, rgba(255, 138, 163, 0.2) 45%, transparent 70%);
+  animation: haloBreathe 1.2s ease-in-out infinite alternate;
+}
+@keyframes haloBreathe {
+  from { transform: scale(0.9); opacity: 0.55; }
+  to   { transform: scale(1.18); opacity: 1; }
 }
 
-/* 全屏爆破：白光亮一下，覆盖整个屏幕（不影响 click-through） */
+/* 全屏爆破：白光亮一下，覆盖整个屏幕（不影响 click-through）
+   用固定尺寸 + transform 缩放，避免 background-size 动画触发全屏重绘（低配机会卡） */
 .screen-flash {
-  /* 用 absolute + vw/vh 显式指定尺寸，避免 fixed + transform 的 containing block 陷阱 */
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  top: 50%;
+  left: 50%;
+  width: 160vmax;
+  height: 160vmax;
+  margin: -80vmax 0 0 -80vmax;
   pointer-events: none;
   opacity: 0;
   z-index: 100;
   background-image: radial-gradient(
     circle at 50% 50%,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(255, 255, 240, 0.8) 15%,
-    rgba(255, 230, 210, 0.5) 35%,
-    rgba(255, 255, 255, 0) 75%
+    rgba(255, 244, 248, 0.92) 0%,
+    rgba(255, 138, 163, 0.55) 22%,
+    rgba(252, 211, 77, 0.32) 45%,
+    rgba(255, 255, 255, 0) 78%
   );
-  background-position: center;
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
+  transform: scale(0.2);
+  will-change: transform, opacity;
+  /* 由 JS 按场景设置强度（预览更弱、正式抽签更亮） */
+  opacity: 0;
+  filter: brightness(var(--flash-strength, 1));
 }
 .screen-flash.active {
   animation: screenFlash 0.7s cubic-bezier(0.2, 0, 0.2, 1);
 }
-/* 用 background-size 动画模拟"从中心炸开"的效果，避开 transform */
 @keyframes screenFlash {
-  0%   { opacity: 0; background-size: 30% 30%; }
-  20%  { opacity: 1; background-size: 100% 100%; }
-  100% { opacity: 0; background-size: 160% 160%; }
+  0%   { opacity: 0; transform: scale(0.2); }
+  20%  { opacity: 1; transform: scale(0.75); }
+  100% { opacity: 0; transform: scale(1.2); }
 }
 
-/* ---------- 签圆点（hover 浮现） ---------- */
-.sign-chips {
+/* ---------- 猫边玻璃面板（四行入口） ---------- */
+/* 面板相对 #ball 的 80×80 盒子定位（right 侧 top:0 或 left 侧 bottom:2px），
+   由 ball.js 根据屏幕边缘加 .menu-left / .menu-up / .menu-compact */
+.pet-menu {
   position: absolute;
-  inset: 0;
-  pointer-events: none; /* 整体不响应，子元素单独打开 */
-  /* 4 个圆点的中心坐标（相对 80x80 球，中心在 40,40） */
+  --menu-w: 236px;
+  width: var(--menu-w);
+  left: calc(100% + 18px);
+  bottom: 2px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: var(--r-lg);
+  background: var(--bg-panel);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-float), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-6px) scale(0.97);
+  transform-origin: 0% 100%;
+  transition:
+    opacity var(--dur-fast) ease,
+    transform var(--dur-base) var(--ease-spring),
+    visibility 0s linear var(--dur-fast);
+  z-index: 7;
 }
-.sign-chip {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1.5px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+.pet-menu.menu-left {
+  left: auto;
+  right: calc(100% + 18px);
+  transform-origin: 100% 100%;
+}
+.pet-menu.menu-up {
+  bottom: auto;
+  top: 0;
+}
+.pet-menu.menu-compact { --menu-w: 152px; }
+.pet-menu.menu-compact .menu-text small { display: none; }
+.pet-menu.menu-compact .menu-item { padding: 8px 10px; }
+
+.ball:hover .pet-menu,
+.ball.orbit-open .pet-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0) scale(1);
+}
+
+.menu-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 13px;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-1);
+  text-align: left;
   cursor: pointer;
-  pointer-events: auto; /* 单独接收点击 */
-  /* 默认隐藏 + 缩小 */
-  opacity: 0;
-  transform: scale(0.6);
-  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-family: inherit;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
 }
-/* 4 个签均匀分布（上 / 右 / 下 / 左）*/
-.sign-chip[data-scope="moment"]  { left: 28px;  top: -28px; transition-delay: 0.00s; }
-.sign-chip[data-scope="today"]   { left: 88px;  top: 28px;  transition-delay: 0.04s; }
-.sign-chip[data-scope="profile"] { left: 28px;  top: 88px;  transition-delay: 0.08s; }
-.sign-chip[data-scope="spirit"]  { left: -32px; top: 28px;  transition-delay: 0.12s; }
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--glass-2);
+  border-color: var(--glass-hairline);
+  outline: none;
+}
+.menu-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  font-size: 15px;
+  background: var(--glass-1);
+  border: 1px solid var(--glass-hairline);
+}
+.menu-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.menu-text b { font-size: 13px; font-weight: 600; }
+.menu-text small {
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-/* 精灵状态气泡（默认隐藏，状态差时显示） */
+/* 抽签动画进行中隐藏菜单（放在最后，保证覆盖 hover / orbit-open） */
+.ball.charging .pet-menu,
+.ball.vanishing .pet-menu,
+.ball.shaking .pet-menu,
+.ball.golden .pet-menu {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 精灵状态气泡（深玻璃 + 金色文字） */
 .pet-bubble {
   position: absolute;
   left: 50%;
-  top: -28px;
+  /* 星轮按钮在上方 33px 处，气泡放到它们上面，避免遮挡 ⏰ 图标 */
+  top: -68px;
   transform: translateX(-50%);
-  background: rgba(26, 29, 36, 0.92);
-  color: #ffb347;
+  background: var(--bg-panel);
+  color: var(--accent-gold);
   font-size: 11px;
   padding: 4px 10px;
-  border-radius: 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--glass-border);
   white-space: nowrap;
   opacity: 0;
   transition: opacity 0.3s;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(4, 2, 10, 0.5);
   z-index: 5;
 }
 .pet-bubble::after {
@@ -257,27 +474,195 @@ html, body {
   bottom: -5px;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(26, 29, 36, 0.92);
+  border-top-color: var(--bg-panel);
   border-bottom: none;
 }
 .pet-bubble.show { opacity: 1; }
 
-.sign-chip:hover {
-  background: rgba(255, 255, 245, 1);
-  transform: scale(1.15) !important;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+
+
+/* 系统开启「减少动态效果」时，不做缩放/闪烁；粒子动画由 JS 直接跳过 */
+@media (prefers-reduced-motion: reduce) {
+  .ball.vanishing .ball-inner,
+  .ball.reveal-in .ball-inner,
+  .screen-flash.active,
+  .ball.charging .ball-halo,
+  .pet-torso,
+  .pet-belly,
+  .pet-robe,
+  .pet-tube,
+  .pet-tail,
+  .pet-face,
+  .ball.charging .pet-glow { animation: none !important; }
+  .pet-figure,
+  .pet-ear,
+  .pet-glow,
+  .pet-menu,
+  .menu-item { transition: none; }
 }
 
-/* hover 球时，4 个圆点淡入 + 弹起 */
-.ball:hover .sign-chip {
-  opacity: 1;
-  transform: scale(1);
+/* ---------- 形象专属抽签动画 ---------- */
+/* 签筒：放大摇一摇 → 一节签掉出来 */
+.lots-stage {
+  position: absolute;
+  inset: -34px;
+  display: none;
+  place-items: center;
+  pointer-events: none;
+  z-index: 3;
 }
-.ball:not(:hover) .sign-chip {
+.ball.shaking .lots-stage { display: grid; }
+.ball.shaking .ball-inner { opacity: 0; }
+.ball.shaking .lots-stage .pet-figure {
+  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 80px;
+  height: 80px;
+  margin-left: -40px;
   opacity: 0;
-  transform: scale(0.6);
+  animation: tubeGrow calc(0.28s / var(--as, 1)) cubic-bezier(0.2, 0.7, 0.2, 1) both, tubeShake calc(0.5s / var(--as, 1)) ease-in-out calc(0.28s / var(--as, 1)) 4;
+}
+.ball.shaking .lots-stage .stick-out {
+  position: absolute;
+  left: 50%;
+  bottom: 108px;
+  width: 16px;
+  height: 62px;
+  margin-left: -8px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffe6b0 0%, #f0c987 60%, #d9a95c 100%);
+  border: 1px solid #c99a4f;
+  box-shadow: 0 0 14px rgba(252, 211, 77, 0.75), 0 0 30px rgba(252, 211, 77, 0.35);
+  opacity: 0;
+  transform-origin: 50% 100%;
+  z-index: 2;
+}
+.ball.shaking .lots-stage .stick-out::after {
+  content: "上上";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 22px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #e2504f, #b8322f);
+  color: #fff3c4;
+  font-size: 8px;
+  line-height: 22px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.ball.shaking .lots-stage .stick-out {
+  animation: stickFly calc(0.72s / var(--as, 1)) cubic-bezier(0.2, 0.8, 0.3, 1) calc(2.1s / var(--as, 1)) both;
+}
+@keyframes tubeGrow {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1.85); }
+}
+@keyframes tubeShake {
+  0%, 100% { rotate: -10deg; }
+  50%      { rotate: 10deg; }
+}
+@keyframes stickFly {
+  0%   { opacity: 0; transform: translateY(0) rotate(0deg); }
+  18%  { opacity: 1; transform: translateY(-20px) rotate(-10deg); }
+  55%  { opacity: 1; transform: translateY(-58px) rotate(8deg); }
+  100% { opacity: 1; transform: translateY(-86px) rotate(-4deg); }
 }
 
-/* 抽签动画进行中不显示 chip（避免误触） */
-.ball.exploding .sign-chips,
-.ball.idle .sign-chips { /* idle 时仍保留 hover 浮现逻辑 */ }
+/* 财神：金光闪闪 → “财神到”三个字逐字现身 */
+.caishen-stage {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 3;
+}
+.ball.golden .caishen-stage { display: block; }
+.gold-beam {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 6px;
+  height: 92px;
+  margin-left: -3px;
+  border-radius: 999px;
+  background: linear-gradient(to top, rgba(252, 211, 77, 0.05), rgba(255, 240, 170, 0.95));
+  opacity: 0;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.8));
+}
+.ball.golden .gold-beam { animation: beamUp calc(0.7s / var(--as, 1)) ease-out both; }
+.gold-beam.b2 { rotate: 55deg; animation-delay: calc(0.06s / var(--as, 1)); }
+.gold-beam.b3 { rotate: 120deg; animation-delay: calc(0.12s / var(--as, 1)); }
+.gold-beam.b4 { rotate: 180deg; animation-delay: calc(0.18s / var(--as, 1)); }
+.gold-beam.b5 { rotate: 240deg; animation-delay: calc(0.24s / var(--as, 1)); }
+.gold-beam.b6 { rotate: 300deg; animation-delay: calc(0.3s / var(--as, 1)); }
+@keyframes beamUp {
+  from { opacity: 0; scale: 1 0.3; }
+  40%  { opacity: 1; scale: 1 1; }
+  to   { opacity: 0; scale: 1 1.25; }
+}
+
+.gold-spark {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffe9a8;
+  box-shadow: 0 0 8px rgba(252, 211, 77, 0.9);
+  opacity: 0;
+}
+.ball.golden .gold-spark { animation: sparkle calc(0.9s / var(--as, 1)) ease-out both; }
+.gold-spark.s1 { left: 22%; top: 28%; animation-delay: calc(0.1s / var(--as, 1)); }
+.gold-spark.s2 { left: 72%; top: 22%; animation-delay: calc(0.18s / var(--as, 1)); }
+.gold-spark.s3 { left: 64%; top: 62%; animation-delay: calc(0.26s / var(--as, 1)); }
+.gold-spark.s4 { left: 30%; top: 66%; animation-delay: calc(0.34s / var(--as, 1)); }
+.gold-spark.s5 { left: 50%; top: 14%; animation-delay: calc(0.42s / var(--as, 1)); }
+@keyframes sparkle {
+  0%   { opacity: 0; scale: 0.4; }
+  35%  { opacity: 1; scale: 1.3; }
+  100% { opacity: 0; scale: 2; }
+}
+
+.caishen-line {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  display: flex;
+  gap: 2px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.caishen-line span {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff3c4;
+  text-shadow: 0 0 10px rgba(252, 211, 77, 0.95), 0 0 22px rgba(252, 150, 40, 0.55);
+  opacity: 0;
+}
+.ball.golden .caishen-line span {
+  animation: caishenChar calc(0.34s / var(--as, 1)) cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.ball.golden .caishen-line span:nth-child(1) { animation-delay: calc(0.9s / var(--as, 1)); }
+.ball.golden .caishen-line span:nth-child(2) { animation-delay: calc(1.12s / var(--as, 1)); }
+.ball.golden .caishen-line span:nth-child(3) { animation-delay: calc(1.34s / var(--as, 1)); }
+@keyframes caishenChar {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.6); filter: blur(3px); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.12); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 减少动态效果：只保留静态结果 */
+@media (prefers-reduced-motion: reduce) {
+  .ball.shaking .lots-stage .pet-figure,
+  .ball.shaking .lots-stage .stick-out,
+  .ball.golden .gold-beam,
+  .ball.golden .gold-spark,
+  .ball.golden .caishen-line span { animation: none !important; }
+  .ball.shaking .lots-stage { display: none; }
+  .ball.golden .caishen-line span { opacity: 1; }
+}

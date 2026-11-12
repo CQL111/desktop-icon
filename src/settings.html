@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.deepseek.com;">
   <title>设置</title>
+  <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/settings.css">
 </head>
 <body>
@@ -13,8 +14,33 @@
     <div id="llm-status" class="llm-status">检测中…</div>
 
     <section class="section">
-      <h2>AI 模型</h2>
-      <p class="hint">默认使用线上 DeepSeek 模型，无需配置。你也可以切换到自己本机的本地模型。</p>
+      <h2>线上模型</h2>
+      <p class="hint">填写后优先生效（优先级：设置面板 &gt; 本机 <code>.env</code> &gt; 应用内置 Key）。开发者本机可用 <code>.env</code>；发布版可内置 Key，用户也可随时换成自己的。Key 只存在这台电脑，不会进 git，已保存的不必重填。</p>
+
+      <label>
+        <span>Base URL</span>
+        <input id="online-base-url" type="text" placeholder="https://api.deepseek.com/v1" autocomplete="off">
+      </label>
+      <label>
+        <span>模型名</span>
+        <input id="online-model" type="text" placeholder="deepseek-chat" autocomplete="off">
+      </label>
+      <label>
+        <span>API Key</span>
+        <input id="online-token" type="password" placeholder="留空表示不修改已保存的 Key" autocomplete="off">
+        <small id="online-token-hint"></small>
+      </label>
+      <div class="row">
+        <button id="online-save" class="btn primary">保存线上配置</button>
+        <button id="online-test" class="btn">测试连接</button>
+        <button id="online-clear" class="btn ghost">清除已存 Key</button>
+      </div>
+      <div id="online-status" class="status"></div>
+    </section>
+
+    <section class="section">
+      <h2>本地模型</h2>
+      <p class="hint">本机已装 Ollama 时可改用本地模型；选空则继续用上面的线上配置。</p>
 
       <label>
         <span>当前本地模型</span>
@@ -73,6 +99,54 @@
         <button id="profile-view" class="btn">查看测算</button>
       </div>
       <div id="profile-status" class="status"></div>
+    </section>
+
+    <section class="section">
+      <h2>桌面形象</h2>
+      <p class="hint">选择桌角常驻的形象。情绪与运势仍会用它的表情和毛色表达。</p>
+      <label>
+        <span>形象</span>
+        <select id="persona-select">
+          <option value="cat">猫</option>
+          <option value="dog">狗</option>
+          <option value="caishen">财神</option>
+          <option value="lots">签筒</option>
+        </select>
+        <small id="persona-hint">切换后立即生效</small>
+      </label>
+      <div class="row">
+        <span class="inline-hint" id="streak-hint"></span>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>每日提醒</h2>
+      <p class="hint">每天固定时间提醒「猫叼来今天的签」。点击通知会打开今日运势。</p>
+      <label class="switch-row">
+        <input id="reminder-toggle" type="checkbox">
+        <span class="switch-track"><i></i></span>
+        <span class="switch-label">开启每日一签提醒</span>
+      </label>
+      <label>
+        <span>提醒时间</span>
+        <input id="reminder-time" type="time" value="09:00">
+      </label>
+    </section>
+
+    <section class="section">
+      <h2>抽签动画</h2>
+      <p class="hint">点击悬浮球时播放全屏粒子动画（球散成粒子 → 汇聚成球与结果）。四签、托盘和快捷键不受影响。系统开启「减少动态效果」时会自动跳过。</p>
+
+      <label class="switch-row">
+        <input id="anim-toggle" type="checkbox">
+        <span class="switch-track"><i></i></span>
+        <span class="switch-label">播放抽签动画</span>
+      </label>
+
+      <div class="row">
+        <button id="anim-preview" class="btn">▶ 预览动画</button>
+        <small id="anim-state" class="inline-hint"></small>
+      </div>
     </section>
 
     <section class="section">

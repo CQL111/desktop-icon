@@ -1,89 +1,105 @@
-/* petPanel.css - 运势精灵面板 */
+/* petPanel.css - 运势精灵面板（深紫玻璃主题） */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
   width: 100%; height: 100%;
   background: transparent;
-  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-family: var(--font-sans);
   overflow: hidden;
   -webkit-user-select: none; user-select: none;
 }
 .panel {
   width: 340px; height: 460px;
-  background: rgba(26, 29, 36, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5);
+  background:
+    radial-gradient(120% 60% at 20% 0%, rgba(255, 138, 163, 0.14) 0%, rgba(255, 138, 163, 0) 60%),
+    var(--bg-panel);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--blur-lg));
+  -webkit-backdrop-filter: blur(var(--blur-lg));
   display: flex; flex-direction: column;
   padding: 16px 18px;
-  color: #e7e9ee;
+  color: var(--text-1);
   overflow-y: auto;
 }
 .panel::-webkit-scrollbar { width: 4px; }
-.panel::-webkit-scrollbar-thumb { background: #353a47; border-radius: 2px; }
+.panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 2px; }
 
 .panel-header { display: flex; align-items: center; gap: 12px; }
 .spirit-face {
   width: 52px; height: 52px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #e6e0ff, #b39ddb 45%, #7e57c2);
+  background: radial-gradient(circle at 35% 30%, #ffe3ea, #ff8aa3 45%, #b04a74);
   display: flex; align-items: center; justify-content: center;
   font-size: 26px;
-  box-shadow: 0 4px 12px rgba(150, 120, 220, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 16px rgba(255, 138, 163, 0.35), inset 0 -4px 8px rgba(50, 10, 30, 0.35);
 }
 .spirit-meta { flex: 1; }
 .spirit-name { font-size: 16px; font-weight: 600; }
-.spirit-sub { font-size: 11px; color: #8a8f99; margin-top: 2px; }
+.spirit-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 .close-btn {
-  background: transparent; border: none; color: #8a8f99;
+  background: transparent; border: 1px solid transparent; color: var(--text-3);
   font-size: 20px; cursor: pointer; width: 24px; height: 24px;
-  border-radius: 4px; display: flex; align-items: center; justify-content: center; line-height: 1;
+  border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; line-height: 1;
+  transition: all var(--dur-fast);
 }
-.close-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.close-btn:hover { background: var(--glass-2); border-color: var(--glass-hairline); color: var(--text-1); }
 
 .pos-hint {
   margin-top: 12px; padding: 8px 12px;
-  background: rgba(125, 200, 255, 0.08); border: 1px solid rgba(125, 200, 255, 0.2);
-  border-radius: 8px; font-size: 12px; color: #7dc8ff;
+  background: var(--info-bg); border: 1px solid rgba(179, 167, 255, 0.3);
+  border-radius: var(--r-sm); font-size: 12px; color: var(--info);
 }
 
 .dims { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
 .dim-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; background: #242832; border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--glass-1);
+  border: 1px solid var(--glass-hairline);
+  border-radius: var(--r-sm);
 }
-.dim-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.dim-name { flex: 1; font-size: 13px; color: #d0d3da; }
+.dim-icon { width: 28px; height: 28px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.dim-name { flex: 1; font-size: 13px; color: var(--text-1); }
 .dim-boost {
   font-size: 14px; font-weight: 600; min-width: 24px; text-align: right;
 }
-.dim-boost.pos { color: #6cd49a; }
-.dim-boost.zero { color: #6c7280; }
+.dim-boost.pos { color: var(--success); }
+.dim-boost.zero { color: var(--text-3); }
 
 .section { margin-top: 16px; }
-.section-title { font-size: 12px; font-weight: 600; color: #d0d3da; margin-bottom: 8px; }
+.section-title { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
 
 .bless-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .bless-btn {
   flex: 1; min-width: 60px;
-  background: #2a2f3a; color: #e7e9ee; border: 1px solid #353a47;
-  padding: 8px 6px; border-radius: 8px; cursor: pointer; font-size: 12px;
-  transition: all 0.15s;
+  background: var(--glass-1); color: var(--text-1);
+  border: 1px solid var(--glass-border);
+  padding: 8px 6px; border-radius: var(--r-sm); cursor: pointer; font-size: 12px;
+  transition: all var(--dur-fast);
 }
-.bless-btn:hover { background: #353a47; border-color: #5cb8ff; }
+.bless-btn:hover { background: var(--glass-3); border-color: rgba(255, 138, 163, 0.6); }
 .bless-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.bless-msg { margin-top: 8px; font-size: 11px; color: #6cd49a; min-height: 14px; }
-.bless-msg.err { color: #ff8a8a; }
+.bless-msg { margin-top: 8px; font-size: 11px; color: var(--success); min-height: 14px; }
+.bless-msg.err { color: var(--danger); }
 
 .ai-btn {
   width: 100%;
-  background: linear-gradient(135deg, #7e57c2, #5cb8ff);
-  color: #fff; border: none;
-  padding: 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500;
+  background: var(--accent-gradient);
+  color: var(--text-on-accent);
+  border: none;
+  padding: 10px; border-radius: var(--r-sm); cursor: pointer; font-size: 13px; font-weight: 600;
+  box-shadow: var(--glow-rose);
+  transition: filter var(--dur-fast);
 }
-.ai-btn:hover { opacity: 0.9; }
+.ai-btn:hover { filter: brightness(1.08); }
 
 .toast {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
-  background: #242832; color: #6cd49a; padding: 6px 14px; border-radius: 8px;
+  background: rgba(24, 17, 30, 0.96);
+  border: 1px solid var(--glass-border);
+  color: var(--success); padding: 6px 14px; border-radius: var(--r-pill);
   font-size: 12px; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(4, 2, 10, 0.5);
 }
 .toast.show { opacity: 1; }

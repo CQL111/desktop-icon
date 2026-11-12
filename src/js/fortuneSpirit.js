@@ -37,6 +37,7 @@ function defaultSpirit() {
     blessCountToday: 0,
     positionWuxing: null,
     positionSince: 0,
+    boostWeekKey: '',
   };
 }
 
@@ -93,6 +94,20 @@ function bless(spirit, dim, dateKey, now = Date.now()) {
   return { spirit, error: null, dim, boost: spirit.boosts[dim], remaining: BLESS_DAILY_LIMIT - spirit.blessCountToday };
 }
 
+// 每周衰减：跨周后每个维度 -1（最低 0），避免三周后全部封顶、失去变化
+function applyWeeklyDecay(spirit, weekKey) {
+  if (!spirit) return spirit;
+  if (spirit.boostWeekKey === weekKey) return spirit;
+  const prev = spirit.boostWeekKey;
+  if (prev) {
+    for (const dim of DIMENSIONS) {
+      spirit.boosts[dim] = Math.max(0, (spirit.boosts[dim] || 0) - 1);
+    }
+  }
+  spirit.boostWeekKey = weekKey;
+  return spirit;
+}
+
 function getBoost(spirit, dim) {
   return spirit.boosts[dim] || 0;
 }
@@ -107,6 +122,7 @@ module.exports = {
   BLESS_DAILY_LIMIT,
   defaultSpirit,
   applyPosition,
+  applyWeeklyDecay,
   bless,
   getBoost,
   getTodayKey,

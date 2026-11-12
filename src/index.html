@@ -4,56 +4,190 @@
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' https://api.deepseek.com;">
   <title>今日运势</title>
+  <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/ball.css">
 </head>
 <body>
   <div id="ball" class="ball">
-    <div id="ball-inner" class="ball-inner" data-mood="smile">
-      <!-- 表情通过 inline SVG 注入，避免依赖外部资源 -->
-      <!-- 大笑 (5 星): 眯眼 + 大张嘴 + 红晕 -->
-      <svg class="face face-laugh" viewBox="0 0 64 64" aria-hidden="true">
-        <path d="M16 26 Q22 18 28 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
-        <path d="M36 26 Q42 18 48 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
-        <path d="M20 38 Q32 52 44 38 Q44 48 32 50 Q20 48 20 38 Z" fill="#3a2a1f"/>
-        <ellipse cx="11" cy="36" rx="3.5" ry="2.5" fill="#ff8aa3" opacity="0.8"/>
-        <ellipse cx="53" cy="36" rx="3.5" ry="2.5" fill="#ff8aa3" opacity="0.8"/>
+    <div class="pet-glow" aria-hidden="true"></div>
+    <!-- 签筒专属抽签动画：放大摇一摇 + 签条掉出 -->
+    <div class="lots-stage" aria-hidden="true">
+      <svg class="pet-figure persona-lots" viewBox="0 0 80 80">
+        <g class="pet-body">
+          <g class="pet-sticks">
+            <rect x="30" y="10" width="4" height="22" rx="2" transform="rotate(-8 32 21)"/>
+            <rect x="38" y="7" width="4" height="25" rx="2"/>
+            <rect x="46" y="11" width="4" height="21" rx="2" transform="rotate(8 48 21)"/>
+            <rect x="30" y="8" width="4" height="6" rx="2" transform="rotate(-8 32 21)" class="pet-stick-tip"/>
+            <rect x="38" y="5" width="4" height="6" rx="2" class="pet-stick-tip"/>
+            <rect x="46" y="9" width="4" height="6" rx="2" transform="rotate(8 48 21)" class="pet-stick-tip"/>
+          </g>
+          <path class="pet-tube" d="M27 28 Q40 24 53 28 L52 70 Q40 76 28 70 Z"/>
+          <path class="pet-tube-band" d="M27.5 34 Q40 30.5 52.5 34 L52.3 41 Q40 37.5 27.7 41 Z"/>
+          <g class="pet-face">
+            <path class="pet-eye pet-eye-happy" d="M34 52 Q37 49 40 52"/>
+            <path class="pet-eye pet-eye-happy" d="M42 52 Q45 49 48 52"/>
+            <path class="pet-mouth" d="M37 56 Q40 58.5 43 56"/>
+          </g>
+        </g>
       </svg>
-      <!-- 微笑 (4 星): 普通眼睛 + 浅笑弧 -->
-      <svg class="face face-smile" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="22" cy="26" r="3" fill="#3a2a1f"/>
-        <circle cx="42" cy="26" r="3" fill="#3a2a1f"/>
-        <path d="M22 42 Q32 48 42 42" stroke="#3a2a1f" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+      <span class="stick-out"></span>
+    </div>
+    <!-- 财神专属抽签动画：金光 + “财神到” -->
+    <div class="caishen-stage" aria-hidden="true">
+      <span class="gold-beam b1"></span>
+      <span class="gold-beam b2"></span>
+      <span class="gold-beam b3"></span>
+      <span class="gold-beam b4"></span>
+      <span class="gold-beam b5"></span>
+      <span class="gold-beam b6"></span>
+      <span class="gold-spark s1"></span>
+      <span class="gold-spark s2"></span>
+      <span class="gold-spark s3"></span>
+      <span class="gold-spark s4"></span>
+      <span class="gold-spark s5"></span>
+      <div class="caishen-line"><span>财</span><span>神</span><span>到</span></div>
+    </div>
+    <div id="ball-inner" class="ball-inner" data-mood="smile" data-persona="cat" aria-hidden="true">
+      <!-- 猫 -->
+      <svg class="pet-figure persona persona-cat" viewBox="0 0 80 80" aria-hidden="true">
+        <g class="pet-body">
+          <ellipse class="pet-ground" cx="40" cy="73" rx="24" ry="4.5"/>
+          <g class="pet-tail">
+            <path class="pet-tail-outer" d="M58 66 C72 70 79 58 74 46 C70 37 62 40 65 47"/>
+            <path class="pet-tail-tip" d="M74 46 C70 37 62 40 65 47"/>
+          </g>
+          <path class="pet-torso" d="M40 22 C57 22 68 34 68 50 C68 65 56 73 40 73 C24 73 12 65 12 50 C12 34 23 22 40 22 Z"/>
+          <path class="pet-belly" d="M40 52 C48 52 53 58 53 63 C53 68 47 71 40 71 C33 71 27 68 27 63 C27 58 32 52 40 52 Z"/>
+          <g class="pet-ear pet-ear-l">
+            <path class="pet-ear-outer" d="M20 33 L16 15 L36 26 Z"/>
+            <path class="pet-ear-inner" d="M23 31 L20.5 20 L32.5 27.5 Z"/>
+          </g>
+          <g class="pet-ear pet-ear-r">
+            <path class="pet-ear-outer" d="M60 33 L64 15 L44 26 Z"/>
+            <path class="pet-ear-inner" d="M57 31 L59.5 20 L47.5 27.5 Z"/>
+          </g>
+          <g class="pet-face">
+            <path class="pet-eye pet-eye-happy" d="M25 42 Q29 37.5 33 42"/>
+            <path class="pet-eye pet-eye-happy" d="M47 42 Q51 37.5 55 42"/>
+            <path class="pet-eye pet-eye-sad" d="M25 38.5 Q29 43 33 38.5"/>
+            <path class="pet-eye pet-eye-sad" d="M47 38.5 Q51 43 55 38.5"/>
+            <path class="pet-mouth" d="M37.5 47.5 Q40 50 42.5 47.5"/>
+            <ellipse class="pet-blush" cx="23" cy="47" rx="4" ry="2.4"/>
+            <ellipse class="pet-blush" cx="57" cy="47" rx="4" ry="2.4"/>
+          </g>
+        </g>
       </svg>
-      <!-- 不笑 (3-2 星): 普通眼睛 + 平嘴 -->
-      <svg class="face face-neutral" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="22" cy="26" r="3.5" fill="#3a2a1f"/>
-        <circle cx="42" cy="26" r="3.5" fill="#3a2a1f"/>
-        <line x1="22" y1="42" x2="42" y2="42" stroke="#3a2a1f" stroke-width="3" stroke-linecap="round"/>
+
+      <!-- 柴犬 -->
+      <svg class="pet-figure persona persona-dog" viewBox="0 0 80 80" aria-hidden="true">
+        <g class="pet-body">
+          <ellipse class="pet-ground" cx="40" cy="74" rx="24" ry="4.5"/>
+          <g class="pet-tail pet-tail-dog">
+            <path class="pet-tail-outer" d="M62 52 C74 48 76 34 66 30 C60 27.5 55 31 58 36"/>
+            <path class="pet-tail-tip" d="M66 30 C60 27.5 55 31 58 36"/>
+          </g>
+          <path class="pet-torso" d="M40 24 C58 24 69 36 69 53 C69 67 57 74 40 74 C23 74 11 67 11 53 C11 36 22 24 40 24 Z"/>
+          <path class="pet-belly" d="M40 54 C48 54 52 60 52 65 C52 70 46 72 40 72 C34 72 28 70 28 65 C28 60 32 54 40 54 Z"/>
+          <g class="pet-ear pet-ear-l">
+            <path class="pet-ear-outer" d="M19 32 L14 14 L35 25 Z"/>
+            <path class="pet-ear-inner" d="M22 30 L19.5 19 L31.5 26.5 Z"/>
+          </g>
+          <g class="pet-ear pet-ear-r">
+            <path class="pet-ear-outer" d="M61 32 L66 14 L45 25 Z"/>
+            <path class="pet-ear-inner" d="M58 30 L60.5 19 L48.5 26.5 Z"/>
+          </g>
+          <g class="pet-face">
+            <path class="pet-eye pet-eye-happy" d="M24 41 Q28 36.5 32 41"/>
+            <path class="pet-eye pet-eye-happy" d="M48 41 Q52 36.5 56 41"/>
+            <path class="pet-eye pet-eye-sad" d="M24 37.5 Q28 42 32 37.5"/>
+            <path class="pet-eye pet-eye-sad" d="M48 37.5 Q52 42 56 37.5"/>
+            <path class="pet-mouth" d="M35 47 Q40 51 45 47 Q40 53 35 47 Z"/>
+            <ellipse class="pet-blush" cx="22" cy="47" rx="4" ry="2.4"/>
+            <ellipse class="pet-blush" cx="58" cy="47" rx="4" ry="2.4"/>
+          </g>
+        </g>
       </svg>
-      <!-- 哭 (1 星): 皱眉眼睛 + 嘴下弧 + 泪滴 -->
-      <svg class="face face-cry" viewBox="0 0 64 64" aria-hidden="true">
-        <path d="M16 26 Q22 22 28 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
-        <path d="M36 26 Q42 22 48 26" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
-        <path d="M20 48 Q32 38 44 48" stroke="#3a2a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
-        <ellipse cx="16" cy="36" rx="2" ry="3" fill="#5cb8ff" opacity="0.9"/>
-        <ellipse cx="48" cy="36" rx="2" ry="3" fill="#5cb8ff" opacity="0.9"/>
+
+      <!-- 财神 -->
+      <svg class="pet-figure persona persona-caishen" viewBox="0 0 80 80" aria-hidden="true">
+        <g class="pet-body">
+          <ellipse class="pet-ground" cx="40" cy="75" rx="22" ry="4"/>
+          <path class="pet-robe" d="M40 38 C56 38 67 50 67 62 C67 71 56 75 40 75 C24 75 13 71 13 62 C13 50 24 38 40 38 Z"/>
+          <circle class="pet-head" cx="40" cy="30" r="15"/>
+          <path class="pet-hat" d="M25 22 L55 22 L51 14 L29 14 Z"/>
+          <circle class="pet-hat-bead" cx="40" cy="11" r="4"/>
+          <path class="pet-beard" d="M31 38 Q40 46 49 38 Q48 50 40 53 Q32 50 31 38 Z"/>
+          <g class="pet-face">
+            <path class="pet-eye pet-eye-happy" d="M30 30 Q33 27 36 30"/>
+            <path class="pet-eye pet-eye-happy" d="M44 30 Q47 27 50 30"/>
+            <path class="pet-eye pet-eye-sad" d="M30 27 Q33 31 36 27"/>
+            <path class="pet-eye pet-eye-sad" d="M44 27 Q47 31 50 27"/>
+            <ellipse class="pet-blush" cx="29" cy="35" rx="3.2" ry="2"/>
+            <ellipse class="pet-blush" cx="51" cy="35" rx="3.2" ry="2"/>
+          </g>
+          <g class="pet-ingot">
+            <path d="M28 62 Q40 56 52 62 Q52 70 40 70 Q28 70 28 62 Z"/>
+            <ellipse cx="40" cy="60" rx="8" ry="3"/>
+          </g>
+        </g>
+      </svg>
+
+      <!-- 签筒 -->
+      <svg class="pet-figure persona persona-lots" viewBox="0 0 80 80" aria-hidden="true">
+        <g class="pet-body">
+          <ellipse class="pet-ground" cx="40" cy="75" rx="20" ry="4"/>
+          <g class="pet-sticks">
+            <rect x="30" y="10" width="4" height="22" rx="2" transform="rotate(-8 32 21)"/>
+            <rect x="38" y="7" width="4" height="25" rx="2"/>
+            <rect x="46" y="11" width="4" height="21" rx="2" transform="rotate(8 48 21)"/>
+            <rect x="30" y="8" width="4" height="6" rx="2" transform="rotate(-8 32 21)" class="pet-stick-tip"/>
+            <rect x="38" y="5" width="4" height="6" rx="2" class="pet-stick-tip"/>
+            <rect x="46" y="9" width="4" height="6" rx="2" transform="rotate(8 48 21)" class="pet-stick-tip"/>
+          </g>
+          <path class="pet-tube" d="M27 28 Q40 24 53 28 L52 70 Q40 76 28 70 Z"/>
+          <path class="pet-tube-band" d="M27.5 34 Q40 30.5 52.5 34 L52.3 41 Q40 37.5 27.7 41 Z"/>
+          <g class="pet-face">
+            <path class="pet-eye pet-eye-happy" d="M34 52 Q37 49 40 52"/>
+            <path class="pet-eye pet-eye-happy" d="M42 52 Q45 49 48 52"/>
+            <path class="pet-eye pet-eye-sad" d="M34 49 Q37 53 40 49"/>
+            <path class="pet-eye pet-eye-sad" d="M42 49 Q45 53 48 49"/>
+            <path class="pet-mouth" d="M37 56 Q40 58.5 43 56"/>
+            <ellipse class="pet-blush" cx="33" cy="56" rx="3" ry="1.8"/>
+            <ellipse class="pet-blush" cx="47" cy="56" rx="3" ry="1.8"/>
+          </g>
+        </g>
       </svg>
     </div>
-    <div class="ball-shine"></div>
-    <div class="ball-flash"></div>
+    <div class="ball-halo" aria-hidden="true"></div>
     <!-- 精灵状态气泡 -->
     <div class="pet-bubble" id="pet-bubble">我有点饿了…</div>
-    <!-- 球周围可选签：默认隐藏，hover 球时浮现 -->
-    <div class="sign-chips" id="sign-chips">
-      <button class="sign-chip" data-scope="moment"  title="此刻个人运势">⏰</button>
-      <button class="sign-chip" data-scope="today"   title="今日黄历">📅</button>
-      <button class="sign-chip" data-scope="profile" title="今日个人运势">👤</button>
-      <button class="sign-chip" data-scope="spirit"  title="精灵祈福">🔮</button>
-    </div>
+    <!-- 猫边玻璃面板：悬停猫时从侧边滑出，四行入口常显标签 -->
+    <nav class="pet-menu" id="pet-menu" aria-label="运势入口">
+      <button class="menu-item" data-scope="moment" title="此刻个人运势">
+        <span class="menu-icon">⏰</span>
+        <span class="menu-text"><b>此刻运势</b><small>时辰吉言 · 宜忌</small></span>
+      </button>
+      <button class="menu-item" data-scope="today" title="今日黄历">
+        <span class="menu-icon">📅</span>
+        <span class="menu-text"><b>今日黄历</b><small>宜忌 · 幸运色 · 评分</small></span>
+      </button>
+      <button class="menu-item" data-scope="profile" title="今日个人运势">
+        <span class="menu-icon">👤</span>
+        <span class="menu-text"><b>个人运势</b><small>命理档案 · 八字星座</small></span>
+      </button>
+      <button class="menu-item" data-scope="spirit" title="精灵祈福">
+        <span class="menu-icon">🔮</span>
+        <span class="menu-text"><b>精灵祈福</b><small>摆位加持 · 祈福</small></span>
+      </button>
+    </nav>
   </div>
+  <!-- 抽签粒子动画画布：覆盖整个屏幕，不拦截鼠标 -->
+  <canvas id="fx" class="fx" aria-hidden="true"></canvas>
   <!-- 全屏爆破 flash：覆盖整个屏幕，pointer-events:none 不影响点击穿透 -->
   <div id="screen-flash" class="screen-flash"></div>
   <script src="js/rendererLogger.js"></script>
+  <script src="js/fx.js"></script>
   <script src="js/ball.js"></script>
 </body>
 </html>

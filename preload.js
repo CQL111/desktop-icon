@@ -5,6 +5,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   // 配置读写
   getConfig: (key) => ipcRenderer.invoke('get-config', key),
+  // 桌面形象：cat | dog | caishen | lots
+  getStreak: () => ipcRenderer.invoke('get-streak'),
+  getPersona: () => ipcRenderer.invoke('get-persona'),
+  setPersona: (name) => ipcRenderer.invoke('set-persona', name),
   saveConfig: (key, value) => ipcRenderer.invoke('save-config', key, value),
 
   // 行为埋点
@@ -16,6 +20,8 @@ contextBridge.exposeInMainWorld('api', {
   savePosition: (x, y) => ipcRenderer.invoke('save-position', x, y),
   updateBallPos: (x, y) => ipcRenderer.invoke('update-ball-pos', x, y),
   getScreenInfo: () => ipcRenderer.invoke('get-screen-info'),
+  // 面板打开时上报「猫 + 菜单」的外接矩形，主进程据此扩大点击穿透热区
+  setHitRegion: (rect) => ipcRenderer.send('set-hit-region', rect),
   showCard: (style, score, fortuneData, ballX, ballY) =>
     ipcRenderer.invoke('show-card', style, score, fortuneData, ballX, ballY),
   closeCard: () => ipcRenderer.invoke('close-card'),
@@ -23,8 +29,8 @@ contextBridge.exposeInMainWorld('api', {
   // 运势
   drawFortune: (options) => ipcRenderer.invoke('draw-fortune', options),
   getTodayFortune: () => ipcRenderer.invoke('get-today-fortune'),
-  showFortuneCard: (style, score, fortuneData, ballX, ballY) =>
-    ipcRenderer.invoke('show-fortune-card', style, score, fortuneData, ballX, ballY),
+  showFortuneCard: (style, score, fortuneData, ballX, ballY, reveal) =>
+    ipcRenderer.invoke('show-fortune-card', style, score, fortuneData, ballX, ballY, !!reveal),
   cardOpened: () => ipcRenderer.invoke('card-opened'),
   cardClosed: (style) => ipcRenderer.invoke('card-closed', style),
 
@@ -44,10 +50,32 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('reset-ball', listener);
     return () => ipcRenderer.removeListener('reset-ball', listener);
   },
+  onPersonaChanged: (handler) => {
+    const listener = (_e, name) => handler(name);
+    ipcRenderer.on('persona-changed', listener);
+    return () => ipcRenderer.removeListener('persona-changed', listener);
+  },
+  onSpiritBoosted: (handler) => {
+    const listener = (_e, info) => handler(info);
+    ipcRenderer.on('spirit-boosted', listener);
+    return () => ipcRenderer.removeListener('spirit-boosted', listener);
+  },
+  onStreakUpdated: (handler) => {
+    const listener = (_e, info) => handler(info);
+    ipcRenderer.on('streak-updated', listener);
+    return () => ipcRenderer.removeListener('streak-updated', listener);
+  },
+
+  // ---------- 设置 / 动画 ----------
+  openSettings: () => ipcRenderer.invoke('open-settings'),
+  previewBallAnim: () => ipcRenderer.invoke('preview-ball-anim'),
 
   // ---------- 模型管理 ----------
-  openSettings: () => ipcRenderer.invoke('open-settings'),
   getLlmStatus: () => ipcRenderer.invoke('get-llm-status'),
+  getOnlineAiConfig: () => ipcRenderer.invoke('get-online-ai-config'),
+  saveOnlineAiConfig: (payload) => ipcRenderer.invoke('save-online-ai-config', payload),
+  clearOnlineAiToken: () => ipcRenderer.invoke('clear-online-ai-token'),
+  testOnlineAi: () => ipcRenderer.invoke('test-online-ai'),
   getLocalModels: () => ipcRenderer.invoke('get-local-models'),
   setLocalModel: (name) => ipcRenderer.invoke('set-local-model', name),
   pullLocalModel: (name) => ipcRenderer.invoke('pull-local-model', name),
@@ -95,6 +123,13 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_e, data) => handler(data);
     ipcRenderer.on('ai-interpretation-ready', listener);
     return () => ipcRenderer.removeListener('ai-interpretation-ready', listener);
+  },
+
+  // AI 不可用时的卡片提示（无 Key / Key 失效）
+  onAiStatus: (handler) => {
+    const listener = (_e, data) => handler(data);
+    ipcRenderer.on('ai-status', listener);
+    return () => ipcRenderer.removeListener('ai-status', listener);
   },
 
   // ---------- 日志桥接 ----------

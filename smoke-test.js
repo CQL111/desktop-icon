@@ -183,8 +183,8 @@ assert(almanac.style === 'almanac', 'almanac style');
 assert(almanac.styleLabel === '今日黄历', 'almanac 标题');
 assert(almanac.yearGanzhi === '丙午', 'almanac 2026=丙午');
 assert(almanac.shengxiao === '马', 'almanac 2026=马');
-assert(Array.isArray(almanac.yi) && almanac.yi.length === 3, 'almanac 宜 3 条');
-assert(Array.isArray(almanac.ji) && almanac.ji.length === 3, 'almanac 忌 3 条');
+assert(Array.isArray(almanac.yi) && almanac.yi.length >= 3, 'almanac 宜至少 3 条');
+assert(Array.isArray(almanac.ji) && almanac.ji.length >= 3, 'almanac 忌至少 3 条');
 assert(almanac.luckyColor && almanac.luckyColor.hex, 'almanac 幸运色');
 assert(almanac.luckyNum >= 1 && almanac.luckyNum <= 9, 'almanac 幸运数字 1-9');
 
@@ -195,6 +195,15 @@ assert(profWithAlmanac.almanac && profWithAlmanac.almanac.yearGanzhi, 'profile �
 
 // moment 融合个人
 const momentWithProfile = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申', profile });
+
+const mA = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申', installId: 'id-aaa' });
+const mB = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申', installId: 'id-bbb' });
+const mA2 = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申', installId: 'id-aaa' });
+assert(JSON.stringify(mA) === JSON.stringify(mA2), '同 installId 此刻运势稳定');
+assert(JSON.stringify(mA) !== JSON.stringify(mB), '不同 installId 此刻运势不同');
+const tA = fortune.generate('traditional', { dateKey: '2026-08-20', installId: 'id-aaa' });
+const tB = fortune.generate('traditional', { dateKey: '2026-08-20', installId: 'id-bbb' });
+assert(JSON.stringify(tA) !== JSON.stringify(tB), '不同 installId 今日运势不同');
 assert(momentWithProfile.styleLabel === '此刻个人运势', 'moment 标题改为此刻个人运势');
 assert(momentWithProfile.personal && momentWithProfile.personal.shengxiao === '猪', 'moment 含个人生肖');
 
@@ -235,6 +244,95 @@ assert(spirit.WUXING_TO_DIM.metal === '财运', 'spirit 金→财运');
 assert(spirit.WUXING_TO_DIM.wood === '事业', 'spirit 木→事业');
 assert(spirit.DIM_FIELDS.爱情.includes('感情'), 'spirit 爱情映射含感情字段');
 
+// ===== 连续看运天数 =====
+const streakMod = require('./src/js/streak');
+{
+  const s0 = streakMod.defaultStreak();
+  const r1 = streakMod.checkIn(s0, '2026-11-10');
+  assert(r1.changed === true && r1.streak === 1 && r1.broke === false, 'streak 首次=1');
+  const r2 = streakMod.checkIn(r1.state, '2026-11-10');
+  assert(r2.changed === false && r2.streak === 1, 'streak 同日不重复');
+  const r3 = streakMod.checkIn(r2.state, '2026-11-11');
+  assert(r3.streak === 2 && r3.state.best === 2, 'streak 连续 +1');
+  const r4 = streakMod.checkIn(r3.state, '2026-11-13');
+  assert(r4.streak === 1 && r4.broke === true, 'streak 断签不清零、从 1 开始');
+  assert(r4.state.best === 2, 'streak 保留最佳记录');
+  assert(streakMod.shiftDateKey('2026-03-01', -1) === '2026-02-28', 'streak 跨月减一天');
+  assert(streakMod.shiftDateKey('2026-01-01', -1) === '2025-12-31', 'streak 跨年减一天');
+}
+
+// 精灵每周衰减
+{
+  const sp = spirit.defaultSpirit();
+  sp.boosts['财运'] = 3;
+  sp.boosts['综合'] = 1;
+  // 第一次调用只记录当前周（没有上一周可比）；跨到下一周才衰减
+  const init = spirit.applyWeeklyDecay(sp, '2026-W46');
+  assert(init.boosts['财运'] === 3, '精灵首周不衰减');
+  const a = spirit.applyWeeklyDecay(init, '2026-W47');
+  assert(a.boosts['财运'] === 2 && a.boosts['综合'] === 0, '精灵跨周 -1 且不低于 0');
+  const b = spirit.applyWeeklyDecay(a, '2026-W47');
+  assert(b.boosts['财运'] === 2, '精灵同周不重复衰减');
+}
+
+// ===== 真黄历：农历 / 节气 / 日干支 / 建除 =====
+const astro = require('./src/js/astro');
+const lunar = require('./src/js/lunar');
+const almanacMod = require('./src/js/almanac');
+{
+  // 春节（正月初一）
+  const spring = { '2023-01-22': '正月初一', '2024-02-10': '正月初一', '2025-01-29': '正月初一', '2026-02-17': '正月初一' };
+  for (const [key, expect] of Object.entries(spring)) {
+    const l = lunar.fromDateKey(key);
+    assert(l && l.month === 1 && l.day === 1 && !l.leap, `农历 ${key} = 正月初一`);
+  }
+  // 闰月：2023 闰二月、2025 闰六月
+  const leap2023 = lunar.fromDateKey('2023-03-22');
+  assert(leap2023 && leap2023.leap && leap2023.month === 2, '2023-03-22 = 闰二月初一');
+  const leap2025 = lunar.fromDateKey('2025-07-25');
+  assert(leap2025 && leap2025.leap && leap2025.month === 6, '2025-07-25 = 闰六月初一');
+  // 节气
+  assert(astro.termOnDate(2024, 2, 4)?.name === '立春', '2024-02-04 立春');
+  assert(astro.termOnDate(2026, 6, 21)?.name === '夏至', '2026-06-21 夏至');
+  assert(astro.termOnDate(2025, 12, 21)?.name === '冬至', '2025-12-21 冬至');
+  // 日干支锚点
+  assert(almanacMod.dayGanzhi('2000-01-07').gan + almanacMod.dayGanzhi('2000-01-07').zhi === '甲子', '2000-01-07 甲子日');
+  const d1 = almanacMod.dayGanzhi('2026-11-01');
+  const d2 = almanacMod.dayGanzhi('2026-11-02');
+  assert((d1.index + 1) % 60 === d2.index, '日干支逐日递增');
+  // 建除顺序
+  assert(almanacMod.JIANCHU.length === 12, '建除十二值日');
+  const day = almanacMod.getDay('2026-11-12');
+  assert(day.lunarText && day.dayGanzhi && day.jianchu && day.chong, 'getDay 字段完整');
+  assert(Array.isArray(day.yi) && day.yi.length >= 3, '宜忌规则产出');
+}
+
+// ===== 典籍检索（本地 RAG 检索层） =====
+const canon = require('./src/js/canon');
+{
+  const books = canon.books();
+  assert(books.length === 3, '典籍目录 3 本');
+  const docs = require('./data/canon/index.json').docs;
+  assert(docs.length >= 120, '典籍文档数 >= 120');
+  // 繁简归一：繁体问题也能命中
+  const a = canon.search('財多身弱');
+  assert(a.ok && a.results.length > 0, '繁体「財多身弱」可命中');
+  // 主题命中
+  const b = canon.search('伤官见官');
+  assert(b.ok && b.results.some((r) => /伤官见官/.test(r.ref + r.text)), '「伤官见官」命中原文');
+  // 卦名
+  const c = canon.search('乾卦 潜龙勿用');
+  assert(c.ok && c.results[0].ref.includes('乾'), '「乾卦」首位命中');
+  // 书目过滤
+  const d = canon.search('甲木', { book: 'ditiansui' });
+  assert(d.ok && d.results.every((r) => r.book === 'ditiansui'), '按书目过滤生效');
+  // 空查询
+  assert(canon.search('   ').ok === false, '空查询返回失败');
+  // 返回字段
+  const e = b.results[0];
+  assert(e.ref && e.text && typeof e.score === 'number', '检索结果字段完整');
+}
+
 // ===== 第五阶段：detector 模式匹配 + 行为打分日志 =====
 const detector = require('./src/js/detector');
 assert(Array.isArray(detector.PATTERNS) && detector.PATTERNS.length >= 6, 'detector 有至少 6 条规则');
@@ -258,6 +356,17 @@ assert(!/sk-[a-zA-Z0-9]{8,}/.test(onlineCfgSrc), 'onlineConfig.js 不含硬编�
 const onlineConfig = require('./src/js/onlineConfig');
 assert(typeof onlineConfig.baseUrl === 'string' && onlineConfig.baseUrl.includes('deepseek'), 'onlineConfig baseUrl');
 assert('token' in onlineConfig, 'onlineConfig 有 token 字段（值来自 .env）');
+// 三种 Key 来源：用户设置 > .env / 内置 > 无
+const ocResolved = onlineConfig.resolve({});
+assert(['user', 'env', 'bundled', 'none'].includes(ocResolved.tokenSource), 'Key 来源标记合法');
+assert(onlineConfig.resolve({ token: 'sk-user-123' }).tokenSource === 'user', '用户填 Key 时来源=user');
+assert(onlineConfig.resolve({ token: '' }).tokenSource !== 'user', '空白 Key 不算用户配置');
+
+const merged = onlineConfig.resolve({ baseUrl: 'https://example.com/v1', token: 'sk-user', model: 'my-model' });
+assert(merged.baseUrl === 'https://example.com/v1' && merged.token === 'sk-user' && merged.model === 'my-model', '设置面板配置覆盖 .env');
+const fallback = onlineConfig.resolve({ baseUrl: '  ', token: '', model: '' });
+assert(fallback.baseUrl.includes('deepseek'), '空白字段回退 .env baseUrl');
+assert(onlineConfig.maskToken('sk-abcdefghijklmnop').includes('••••'), 'maskToken 打码');
 
 const agent = require('./src/js/agent');
 assert(agent.TOOLS.length >= 6, 'agent tools 数量');
@@ -270,7 +379,8 @@ assert(lotsTool.style === 'lots' && lotsTool.poem, 'agent get_today_fortune lots
 const unknown = agent.executeTool('not_a_tool', {}, {});
 assert(unknown.error === 'UNKNOWN_TOOL', 'agent 未知 tool');
 assert(agent.parseArgs('{"dimension":"财运"}').dimension === '财运', 'agent parseArgs');
-assert(agent.TOOLS.length === 7, '默认个人 tools 仍是 7 个');
+assert(agent.TOOLS.length === 8, '默认个人 tools 8 个（含 search_canon）');
+assert(agent.TOOLS.some((t) => t.function.name === 'search_canon'), '默认 tools 含典籍检索');
 assert(!agent.TOOLS.some((t) => t.function.name === 'group_by_birthday'), '默认 tools 不含分组');
 assert(Array.isArray(agent.SCENES) && agent.SCENES.some((s) => s.id === 'group_by_birthday'), '场景表含生日分组');
 assert(agent.resolveScene('按生日3人一组 1995-07-20', [], '') === agent.SCENES[0].id, '注册表 resolveScene 返回场景 id');
