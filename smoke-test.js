@@ -340,6 +340,12 @@ assert(detector.classify('[T] [ERROR] [ai] HTTP_401', { status: 401 }).matched =
 assert(detector.classify('[T] [ERROR] [ai] NETWORK refused', {}).category === 'network', 'detector 识别 network');
 assert(detector.classify('[T] [WARN] [x] nothing', {}).matched === false, 'detector 不误报 warn');
 assert(detector.parseLevel('[2026-08-21T10:00:00.000Z] [CRITICAL] [x] y') === 'critical', 'parseLevel critical');
+// AI 异常分类（余额 / 无效 Key / 模型名 / 超时）
+assert(detector.classify('INSUFFICIENT_BALANCE status=402 余额不足', { status: 402 }).category === 'balance', 'detector 识别余额不足');
+assert(detector.classify('AUTH_FAILED status=401', { status: 401 }).category === 'auth', 'detector 识别 AUTH_FAILED');
+assert(detector.classify('model_not_found', {}).category === 'model', 'detector 识别模型不存在');
+assert(detector.classify('TIMEOUT', {}).category === 'timeout', 'detector 识别超时');
+assert(detector.classify('UPSTREAM_ERROR status=200', {}).category === 'response', 'detector 识别上游错误');
 
 // behavior 打分仍正常（加了 logger 后不破坏逻辑）
 const behaviorMod = require('./src/js/behavior');

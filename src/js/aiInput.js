@@ -133,16 +133,28 @@ async function submit() {
   }
 }
 
-function friendlyInputError(code) {
-  return {
+function friendlyInputError(raw) {
+  const code = String(raw || '');
+  const MAP = {
     NO_TOKEN: '尚未配置 API Key，请先在设置里填写',
     AUTH_FAILED: 'API Key 无效或已过期，请到设置里更新',
+    INSUFFICIENT_BALANCE: 'AI 额度已用尽，请充值或在设置里换用自己的 Key',
     RATE_LIMITED: '调用太频繁，请稍后再试',
     TIMEOUT: '网络有点慢，稍后再试',
     NETWORK: '网络似乎不太稳定',
+    UPSTREAM_ERROR: '模型服务返回错误，稍后再试',
+    BAD_JSON: '模型返回格式异常，稍后重试',
     EMPTY_QUERY: '请输入想问的内容',
+    EMPTY_RESPONSE: '模型没有返回内容',
     AGENT_MAX_STEPS: '这轮调用太长，请换个说法再问',
-  }[code] || ('请求失败：' + (code || '未知错误'));
+  };
+  // 错误可能是 "HTTP_400: 余额不足"，先按前缀取主码
+  const main = code.split(':')[0].trim();
+  if (MAP[main]) return MAP[main];
+  if (/余额不足|insufficient/i.test(code)) return 'AI 额度已用尽，请充值或在设置里换用自己的 Key';
+  if (/invalid_api_key|Incorrect API key/i.test(code)) return 'API Key 无效，请到设置里更新';
+  if (/model_not_found|does not exist/i.test(code)) return '模型名不可用，请在设置里修改模型名';
+  return '请求失败：' + (code || '未知错误');
 }
 
 window.api.onAiInputFocus((data) => {

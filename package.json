@@ -1,6 +1,6 @@
 {
   "name": "fortune-ball",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "main.js",
   "description": "今日运势 · 桌面桌宠：点一下桌宠，看今天的签与黄历，AI 解读可查典籍出处",
   "scripts": {

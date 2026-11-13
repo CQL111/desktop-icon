@@ -66,7 +66,8 @@ class LogWatcher {
   processLine(line) {
     const level = detector.parseLevel(line);
     if (!level) return;
-    if (level !== 'error' && level !== 'critical') return;
+    // warn 也要看：AI 降级、余额不足等常被上层 catch 后记成 warn
+    if (level !== 'error' && level !== 'critical' && level !== 'warn') return;
 
     // 提取 meta（行末的 JSON 段）
     const metaMatch = line.match(/\s(\{.*\})\s*$/);
@@ -103,7 +104,7 @@ class LogWatcher {
       .then(() => this.onDiagnose && this.onDiagnose(ctx))
       .catch((e) => logger.warn('watcher', 'onDiagnose failed', { error: e.message }));
 
-    if (level === 'critical' && this.onNotify) {
+    if ((level === 'critical') && this.onNotify) {
       Promise.resolve()
         .then(() => this.onNotify(ctx))
         .catch((e) => logger.warn('watcher', 'onNotify failed', { error: e.message }));

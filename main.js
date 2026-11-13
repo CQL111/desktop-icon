@@ -1698,6 +1698,10 @@ function friendlyError(code) {
     EMPTY_QUERY: '问题不能为空',
     EMPTY_RESPONSE: '模型没有返回内容',
     AGENT_MAX_STEPS: '这轮调用太长，请换个说法再问',
+    INSUFFICIENT_BALANCE: 'AI 额度已用尽，请充值或在设置里换用自己的 Key',
+    UPSTREAM_ERROR: '模型服务返回错误，稍后再试',
+    BAD_JSON: '模型返回格式异常，稍后重试',
+    NO_MESSAGES: '请求内容为空',
   }[code] || ('请求失败：' + code);
 }
 

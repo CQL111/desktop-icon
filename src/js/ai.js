@@ -57,6 +57,17 @@ function normalizeBaseUrl(baseUrl) {
   return url;
 }
 
+// ---------- 失败去重：同类错误 5 分钟内只记一次 error，其余降为 warn ----------
+const FAIL_DEDUPE_MS = 5 * 60 * 1000;
+const lastFailAt = new Map();
+function shouldLogAsError(key) {
+  const now = Date.now();
+  const last = lastFailAt.get(key) || 0;
+  if (now - last < FAIL_DEDUPE_MS) return false;
+  lastFailAt.set(key, now);
+  return true;
+}
+
 // ---------- 核心：callLLM ----------
 /**
  * 调用 OpenAI 兼容 chat completions（DeepSeek / 本地 Ollama）。
@@ -101,6 +112,24 @@ async function callLLM({
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  // 统一错误出口：写一条结构化日志再抛，保证日志里一定能看到原因
+  const fail = (code, status, detail, extra) => {
+    const meta = {
+      code,
+      status: status || 0,
+      model,
+      local: ep.isLocal,
+      timeoutMs,
+      ms: Date.now() - startTs,
+      ...(extra || {}),
+    };
+    const line = `${code} status=${status || '-'} ${detail || ''}`.trim();
+    // 首次（5 分钟内）记 error（会触发 watcher 诊断/通知），重复的只记 warn，避免刷屏
+    if (shouldLogAsError(code)) logger.error('ai.callLLM', line, meta);
+    else logger.warn('ai.callLLM', '（重复）' + line, meta);
+    return new Error(detail && code.startsWith('HTTP_') ? `${code}: ${detail}` : code);
+  };
+
   let resp;
   try {
     resp = await net.fetch(ep.url, {
@@ -114,8 +143,8 @@ async function callLLM({
     });
   } catch (e) {
     clearTimeout(timer);
-    if (e.name === 'AbortError') throw new Error('TIMEOUT');
-    throw new Error(`NETWORK: ${e.message || e}`);
+    if (e.name === 'AbortError') throw fail('TIMEOUT', 0, `超过 ${timeoutMs}ms 未返回`);
+    throw fail('NETWORK', 0, String((e && e.message) || e));
   }
   clearTimeout(timer);
 
@@ -124,23 +153,34 @@ async function callLLM({
   try {
     json = await resp.json();
   } catch (e) {
-    throw new Error(`BAD_JSON: status=${status}`);
+    throw fail('BAD_JSON', status, '响应不是合法 JSON');
   }
 
-  if (status === 401 || status === 403) throw new Error('AUTH_FAILED');
-  if (status === 429) throw new Error('RATE_LIMITED');
-  if (status >= 500) throw new Error(`SERVER_${status}`);
+  // 从响应体里提取服务端错误信息（DeepSeek 常见：余额不足 / 无效 Key / 模型不存在）
+  const upstreamMsg = String(
+    (json && (json.error?.message || json.error_message || json.message)) || ''
+  ).replace(/s+/g, ' ').slice(0, 200);
+  const code = (json && json.error && json.error.code) || '';
 
-  if (!resp.ok) {
-    const msg = (json && (json.error?.message || json.error_message || json.message)) || `HTTP_${status}`;
-    throw new Error(`HTTP_${status}: ${msg}`);
+  if (status === 401 || status === 403) throw fail('AUTH_FAILED', status, upstreamMsg, { upstreamCode: code });
+  if (status === 429) throw fail('RATE_LIMITED', status, upstreamMsg, { upstreamCode: code });
+  if (status === 402) throw fail('INSUFFICIENT_BALANCE', status, upstreamMsg, { upstreamCode: code });
+  if (status >= 500) throw fail(`SERVER_${status}`, status, upstreamMsg, { upstreamCode: code });
+
+  // 业务层错误也可能以 200 + error 字段返回
+  if (json && json.error && !json.choices) {
+    throw fail('UPSTREAM_ERROR', status, upstreamMsg, { upstreamCode: code });
   }
+
+  if (!resp.ok) throw fail(`HTTP_${status}`, status, upstreamMsg, { upstreamCode: code });
 
   const message = json?.choices?.[0]?.message || {};
   const content = message.content || '';
   const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
   const normalizedUsage = json?.usage || {};
-  if (!content && toolCalls.length === 0) throw new Error('EMPTY_RESPONSE');
+  if (!content && toolCalls.length === 0) {
+    throw fail('EMPTY_RESPONSE', status, `finish=${json?.choices?.[0]?.finish_reason || '-'}`);
+  }
 
   logger.info('ai.callLLM', `done ${Date.now() - startTs}ms tokens=${normalizedUsage.total_tokens || '?'} tools=${toolCalls.length}`);
   return {

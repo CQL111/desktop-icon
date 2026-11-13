@@ -10,6 +10,34 @@ const PATTERNS = [
     hint: 'Token 失效或权限不足，请到设置面板更新 API Token',
   },
   {
+    name: 'insufficient_balance',
+    test: (line, meta) => /INSUFFICIENT_BALANCE|余额不足|余额已用尽|quota|insufficient_quota/i.test(line) || meta?.status === 402,
+    level: 'critical',
+    category: 'balance',
+    hint: 'API 额度已用尽：请到模型服务控制台充值，或在设置里换一把自己的 Key',
+  },
+  {
+    name: 'invalid_key',
+    test: (line, meta) => /invalid_api_key|Incorrect API key|invalid token/i.test(line) || meta?.upstreamCode === 'invalid_api_key',
+    level: 'critical',
+    category: 'auth',
+    hint: 'API Key 无效：请到设置面板重新填写，或确认服务商是否已吊销',
+  },
+  {
+    name: 'model_not_found',
+    test: (line) => /model_not_found|Model Not Exist|does not exist/i.test(line),
+    level: 'error',
+    category: 'model',
+    hint: '模型名不存在：请在设置里改成服务商支持的模型名（如 deepseek-chat）',
+  },
+  {
+    name: 'timeout',
+    test: (line) => /TIMEOUT/.test(line),
+    level: 'error',
+    category: 'timeout',
+    hint: '模型响应超时：可能是网络慢或服务繁忙，稍后重试',
+  },
+  {
     name: 'rate_limit',
     test: (line, meta) => /RATE_LIMITED|HTTP_429/.test(line) || meta?.status === 429,
     level: 'error',
@@ -32,7 +60,7 @@ const PATTERNS = [
   },
   {
     name: 'bad_response',
-    test: (line) => /BAD_JSON|EMPTY_RESPONSE/.test(line),
+    test: (line) => /BAD_JSON|EMPTY_RESPONSE|UPSTREAM_ERROR/.test(line),
     level: 'error',
     category: 'response',
     hint: '模型返回异常，可能是临时问题',
