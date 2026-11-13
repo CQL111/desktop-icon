@@ -21,6 +21,7 @@
     "build:key:check": "node scripts/build-bundled-key.js --check",
     "build:exe": "npm run build:local",
     "build:legal": "node scripts/build-legal.js",
+    "build:site": "node scripts/build-site.js",
     "build:personal": "npm run build:legal && node scripts/build-bundled-key.js && npm run clean && electron-builder --win --publish never --config electron-builder.key.yml",
     "build:personal:mac": "npm run build:legal && node scripts/build-bundled-key.js && electron-builder --mac --config electron-builder.key.yml",
     "build:public": "npm run build:legal && npm run clean && electron-builder --win --publish never --config electron-builder.public.yml",
