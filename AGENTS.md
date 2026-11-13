@@ -15,6 +15,8 @@
 
 **两套构建**：`electron-builder.key.yml`（内置 Key，产物 `out/`，自用）、`electron-builder.public.yml`（不带 Key，产物 `out-public/`，公开）、`electron-builder.yml`（默认）。`.gitignore` 只忽略 `build/bundled-ai.json`，`build/entitlements.mac.plist` 需入库。
 
+**关联项目 · 职场搭子（work-companion）**：`C:personalwork-companion` 已独立成新项目，**复制**了本项目的黄历引擎（`src/js/engine/`：astro/lunar/almanac/canon）。两边接口保持一致、只增不改；改动这四个文件时**考虑同步到新项目**。新项目定位是职场决策辅助（「什么时候做」），本项目定位是运势桌宠（娱乐）。新项目文档：`work-companion/AGENTS.md`、`docs/PRODUCT.md`、`docs/ENGINE.md`、`docs/DECISIONS.md`。
+
 **三种 Key 来源**：设置面板 `store.aiConfig.token`（user）/ 本机 `.env`（env）/ 构建内置 `resources/bundled-ai.json`（bundled），由 `onlineConfig.resolve(saved, {preferEnv})` 决定。**开发态（`!app.isPackaged`）传 `preferEnv:true`，`.env` 优先**；发布版默认设置面板优先。构建内置：`npm run build:key`（`scripts/build-bundled-key.js` 生成 `build/bundled-ai.json`，`electron-builder.key.yml` 的 `extraResources` 复制；`/build` 已 gitignore）。
 
 **典籍 RAG（本地检索 + 线上模型）**：`scripts/build-canon-index.js` 把 `data/canon/raw/*.txt` 清洗成 `data/canon/index.json`（周易 64 卦 / 滴天髓 19 篇 / 渊海子平 69 节）；`src/js/canon.js` 做繁简归一（配对串必须去空白）、单字+双字分词、BM25 排序与命中摘录。Agent 新增工具 `search_canon`，system prompt 要求「先检索再引用、引用必须是返回原文、标注出处、检索不到要如实说明」。`runAgent` 返回 `citations`，主进程透传，AI 浮窗渲染可展开的「典籍出处」。原始 txt 被 gitignore，只提交清洗后的 index.json。
