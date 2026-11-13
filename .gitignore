@@ -1,6 +1,7 @@
 /node_modules
 dist
 /release
+/out
 .env
 .env.local
 !.env.example
@@ -10,3 +11,4 @@ data/canon/raw/
 
 # 构建时生成的内置 Key（含密钥，绝不入库）
 /build
+

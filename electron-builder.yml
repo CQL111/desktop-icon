@@ -4,7 +4,8 @@
 appId: com.fortune.ball
 productName: fortune-ball
 directories:
-  output: release
+  # 产物目录（不用 dist/release，避免被编辑器索引占用导致 EBUSY）
+  output: out
 # 只打包运行所需文件。注意：electron-builder 不会自动忽略 .env，
 # 这里用白名单把源码、文档、脚本和密钥文件挡在安装包之外。
 files:
