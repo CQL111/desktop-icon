@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // ---------- 设置 / 动画 ----------
   openSettings: () => ipcRenderer.invoke('open-settings'),
+  openLegal: (key) => ipcRenderer.invoke('open-legal', key),
+  acceptConsent: () => ipcRenderer.invoke('accept-consent'),
+  quitApp: () => ipcRenderer.invoke('quit-app'),
   previewBallAnim: () => ipcRenderer.invoke('preview-ball-anim'),
 
   // ---------- 模型管理 ----------

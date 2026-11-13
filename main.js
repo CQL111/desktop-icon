@@ -53,6 +53,7 @@ const store = new Store({
     dailyReminder: { enabled: false, time: '09:00', lastNotifiedDate: '' }, // 每日一签提醒
     persona: 'cat',        // 桌面形象：cat | dog | caishen | lots
     streak: { count: 0, best: 0, lastDate: '' }, // 连续看运天数
+    consentVersion: 0,     // 已同意的协议版本；与 AGREEMENT_VERSION 不一致时首次启动需重新同意
   },
 });
 
@@ -630,6 +631,85 @@ function openAiInputWindow() {
   win.show();
   win.focus();
   sendAiInputFocus(win);
+}
+
+// ---------- 首次启动协议同意 ----------
+// 修改协议内容时把版本 +1，用户下次启动会重新看到同意页
+const AGREEMENT_VERSION = 1;
+let consentWindow = null;
+
+function needsConsent() {
+  return Number(store.get('consentVersion') || 0) < AGREEMENT_VERSION;
+}
+
+function createConsentWindow() {
+  if (consentWindow && !consentWindow.isDestroyed()) {
+    consentWindow.show();
+    consentWindow.focus();
+    return consentWindow;
+  }
+  consentWindow = new BrowserWindow({
+    width: 560,
+    height: 640,
+    minWidth: 460,
+    minHeight: 520,
+    resizable: true,
+    transparent: false,
+    frame: true,
+    title: '欢迎使用 · 今日运势',
+    backgroundColor: '#141019',
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+  consentWindow.setMenuBarVisibility(false);
+  consentWindow.loadFile(path.join(__dirname, 'src', 'consent.html'));
+  consentWindow.once('ready-to-show', () => consentWindow.show());
+  consentWindow.on('closed', () => { consentWindow = null; });
+  // 未同意就关窗 → 退出应用
+  consentWindow.on('close', () => {
+    if (needsConsent()) {
+      isQuitting = true;
+      setTimeout(() => app.quit(), 50);
+    }
+  });
+  return consentWindow;
+}
+
+// ---------- 法律与隐私窗口 ----------
+let legalWindow = null;
+function createLegalWindow(docKey) {
+  const key = ['privacy', 'terms', 'disclaimer', 'thirdparty'].includes(docKey) ? docKey : 'privacy';
+  if (legalWindow && !legalWindow.isDestroyed()) {
+    legalWindow.loadFile(path.join(__dirname, 'src', 'legal.html'), { search: 'doc=' + key });
+    legalWindow.show();
+    legalWindow.focus();
+    return legalWindow;
+  }
+  legalWindow = new BrowserWindow({
+    width: 760,
+    height: 740,
+    minWidth: 480,
+    minHeight: 420,
+    transparent: false,
+    frame: true,
+    title: '法律与隐私',
+    backgroundColor: '#141019',
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+  legalWindow.setMenuBarVisibility(false);
+  legalWindow.loadFile(path.join(__dirname, 'src', 'legal.html'), { search: 'doc=' + key });
+  legalWindow.once('ready-to-show', () => legalWindow.show());
+  legalWindow.on('closed', () => { legalWindow = null; });
+  return legalWindow;
 }
 
 // ---------- 精灵面板 ----------
@@ -1505,6 +1585,30 @@ function registerIpc() {
     return next;
   });
 
+  handle('accept-consent', () => {
+    const wasFirstRun = needsConsent();
+    store.set('consentVersion', AGREEMENT_VERSION);
+    logger.info('consent', 'version=' + AGREEMENT_VERSION);
+    if (wasFirstRun) app.emit('consent-accepted');
+    if (consentWindow && !consentWindow.isDestroyed()) {
+      // 允许正常关闭
+      consentWindow.removeAllListeners('close');
+      consentWindow.close();
+    }
+    return true;
+  });
+
+  handle('quit-app', () => {
+    isQuitting = true;
+    app.quit();
+    return true;
+  });
+
+  handle('open-legal', (_e, key) => {
+    createLegalWindow(key);
+    return true;
+  });
+
   handle('open-settings', () => {
     createSettingsWindow();
     return true;
@@ -1931,6 +2035,36 @@ app.whenReady().then(() => {
   }
   registerIpc();
   registerLogIpc();
+  // 首次启动（或协议版本升级）必须先同意用户协议/隐私政策
+  if (needsConsent()) {
+    logger.info('consent', 'required (version=' + AGREEMENT_VERSION + ')');
+    createConsentWindow();
+    // 托盘仍创建，方便用户从菜单退出
+    createTray();
+    // 同意后立即进入正常启动流程
+    app.once('consent-accepted', () => {
+      logger.info('consent', 'accepted, starting app');
+      createBallWindow();
+      registerShortcut();
+      applyAutoStart(store.get('autoStart') === true);
+      startCursorPolling();
+      startWatcher();
+      startSpiritAccum();
+      scheduleDailyReminder();
+      setTimeout(() => {
+        selfCheck.runSelfCheck({
+          logWatcher,
+          onlineConfig,
+          getOnlineToken: () => onlineConfig.resolve(store.get('aiConfig'), { preferEnv: !app.isPackaged }).token,
+          localLLM,
+          tray,
+          ballWindow,
+          globalShortcut,
+        }).catch((e) => logger.warn('selfCheck', 'run failed: ' + e.message));
+      }, 5000);
+    });
+    return;
+  }
   createBallWindow();
   createTray();
   registerShortcut();

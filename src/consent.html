@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
+  <title>欢迎使用 · 今日运势</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/consent.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="badge">FORTUNE PET</div>
+    <h1>欢迎使用<span>今日运势</span></h1>
+    <p class="lead">一只常驻桌角的运势桌宠。开始前，请花一分钟了解以下内容：</p>
+
+    <ul class="points">
+      <li><b>核心功能完全离线</b><span>黄历、抽签、运势卡片不联网也能用，数据保存在本机。</span></li>
+      <li><b>AI 是可选增强</b><span>只有你主动提问或展示 AI 解读时，问题与当日运势数据才会发送给你配置的模型服务。不配置 Key 也能正常使用。</span></li>
+      <li><b>内容为文化娱乐用途</b><span>运势、黄历、签文与 AI 解读不构成医疗、法律或投资建议。</span></li>
+    </ul>
+
+    <div class="docs">
+      <button class="link" data-doc="privacy">隐私政策</button>
+      <button class="link" data-doc="terms">用户协议</button>
+      <button class="link" data-doc="disclaimer">免责声明</button>
+      <button class="link" data-doc="thirdparty">第三方许可</button>
+    </div>
+
+    <label class="agree">
+      <input id="agree" type="checkbox">
+      <span>我已阅读并同意《用户协议》《隐私政策》与《免责声明》</span>
+    </label>
+
+    <div class="actions">
+      <button id="quit" class="btn ghost">退出</button>
+      <button id="accept" class="btn primary" disabled>同意并开始</button>
+    </div>
+    <p class="note">你可以随时在「设置 → 关于」中重新查看这些文档。</p>
+  </div>
+  <script src="js/rendererLogger.js"></script>
+  <script src="consent.js"></script>
+</body>
+</html>

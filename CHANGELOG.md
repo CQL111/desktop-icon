@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0] — 隐私合规与双版本构建（2026-11-13）
+
+### 新增
+- **首次启动协议同意页**：需勾选同意《用户协议》《隐私政策》《免责声明》后才启动；协议版本升级会再次提示
+- **应用内法律文档**：设置 → 关于 可随时查看隐私政策、用户协议、免责声明、第三方与开源许可
+- **两套构建**：`build:personal`（内置 Key，自用）与 `build:public`（不带 Key，公开分发）
+- **macOS 构建**：dmg（arm64 + x64）、1024 图标、hardened runtime 与 entitlements 模板
+
+### 修复
+- `build/` 曾整体被 gitignore，导致 entitlements 无法入库；改为仅忽略 `build/bundled-ai.json`
+
+
 ## [1.1.1] — AI 异常日志（2026-11-13）
 
 ### 新增

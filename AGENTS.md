@@ -9,6 +9,12 @@
 
 **卡片尺寸约定**：卡片窗口固定 380×600（`main.js` 的 `CARD_WIDTH/HEIGHT`），内容区 `#content` 是 `overflow-y:auto`（细滚动条、暗色），操作栏 `.actions` 用 `position:sticky; bottom:0` 吸底，内容超高时按钮仍可见。新增卡片内容不需要再关心高度裁剪，但也别再假设「卡片一定能放下」。
 
+**首次启动协议同意**：`main.js` 的 `AGREEMENT_VERSION` 与 store 的 `consentVersion` 比较，不一致时先开 `src/consent.html`（**不创建球窗口**），同意后 emit `consent-accepted` 再走正常启动；未同意关窗即退出。修改协议内容时把版本 +1。
+
+**法律文档**：源文件在 `docs/legal/*.md`，`npm run build:legal`（已挂在 prebuild）生成 `src/legal-data.js`，设置页「关于」与同意页通过 `open-legal` IPC 打开 `src/legal.html?doc=privacy|terms|disclaimer|thirdparty`。
+
+**两套构建**：`electron-builder.key.yml`（内置 Key，产物 `out/`，自用）、`electron-builder.public.yml`（不带 Key，产物 `out-public/`，公开）、`electron-builder.yml`（默认）。`.gitignore` 只忽略 `build/bundled-ai.json`，`build/entitlements.mac.plist` 需入库。
+
 **三种 Key 来源**：设置面板 `store.aiConfig.token`（user）/ 本机 `.env`（env）/ 构建内置 `resources/bundled-ai.json`（bundled），由 `onlineConfig.resolve(saved, {preferEnv})` 决定。**开发态（`!app.isPackaged`）传 `preferEnv:true`，`.env` 优先**；发布版默认设置面板优先。构建内置：`npm run build:key`（`scripts/build-bundled-key.js` 生成 `build/bundled-ai.json`，`electron-builder.key.yml` 的 `extraResources` 复制；`/build` 已 gitignore）。
 
 **典籍 RAG（本地检索 + 线上模型）**：`scripts/build-canon-index.js` 把 `data/canon/raw/*.txt` 清洗成 `data/canon/index.json`（周易 64 卦 / 滴天髓 19 篇 / 渊海子平 69 节）；`src/js/canon.js` 做繁简归一（配对串必须去空白）、单字+双字分词、BM25 排序与命中摘录。Agent 新增工具 `search_canon`，system prompt 要求「先检索再引用、引用必须是返回原文、标注出处、检索不到要如实说明」。`runAgent` 返回 `citations`，主进程透传，AI 浮窗渲染可展开的「典籍出处」。原始 txt 被 gitignore，只提交清洗后的 index.json。

@@ -336,6 +336,15 @@ $('profile-view').addEventListener('click', async () => {
   }
 });
 
+// ---------- 法律与隐私 ----------
+document.querySelectorAll('.legal-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    const key = b.getAttribute('data-legal');
+    window.logger.info('settings.legal', 'open ' + key);
+    window.api.openLegal(key);
+  });
+});
+
 // 启动
 (async () => {
   window.logger.info('settings.load', 'start');

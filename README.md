@@ -110,6 +110,21 @@ node smoke-test.js
 
 ## 打包（Build）
 
+> 构建前会自动生成 `src/legal-data.js`（法律文档），无需手动执行。
+
+| 目标 | 命令 | 是否内置 Key | 产物目录 |
+|---|---|---|---|
+| **个人版（自用）** | `npm run build:personal` | ✅ 内置 `.env` 的 Key | `out/` |
+| **公开版（分发）** | `npm run build:public` | ❌ 用户自行配置 | `out-public/` |
+| macOS 个人版 | `npm run build:personal:mac` | ✅ | `out/` |
+| macOS 公开版 | `npm run build:public:mac` | ❌ | `out-public/` |
+
+macOS 需要 Apple Developer 账号做签名与公证，否则用户需右键打开；在 Windows 上无法交叉构建可用的 mac 包，请用 Mac 或 GitHub Actions。
+
+`docs/legal/` 下是隐私政策、用户协议、免责声明、第三方许可，构建时会打包进应用，用户可在「设置 → 关于」查看。
+
+## 旧版打包说明
+
 产物在 `release/`（已 gitignore；`dist/` 保留给旧产物）。打包会自动带应用图标，并只收录运行所需文件（`.env`、源码文档、脚本不会进包）。
 
 | 命令 | 作用 |

@@ -1,13 +1,13 @@
 {
   "name": "fortune-ball",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "main": "main.js",
   "description": "今日运势 · 桌面桌宠：点一下桌宠，看今天的签与黄历，AI 解读可查典籍出处",
   "scripts": {
     "start": "electron .",
     "start:hidden": "electron . --hidden",
-    "clean": "rimraf release dist",
-    "prebuild": "npm run clean ",
+    "clean": "rimraf out out-public release dist",
+    "prebuild": "npm run build:legal",
     "build": "electron-builder --win",
     "release": "node scripts/release.js",
     "release:patch": "node scripts/release.js patch",
@@ -19,7 +19,12 @@
     "build:canon": "node scripts/build-canon-index.js",
     "build:key": "node scripts/build-bundled-key.js && npm run clean && electron-builder --win --publish never --config electron-builder.key.yml",
     "build:key:check": "node scripts/build-bundled-key.js --check",
-    "build:exe": "npm run build:local"
+    "build:exe": "npm run build:local",
+    "build:legal": "node scripts/build-legal.js",
+    "build:personal": "npm run build:legal && node scripts/build-bundled-key.js && npm run clean && electron-builder --win --publish never --config electron-builder.key.yml",
+    "build:personal:mac": "npm run build:legal && node scripts/build-bundled-key.js && electron-builder --mac --config electron-builder.key.yml",
+    "build:public": "npm run build:legal && npm run clean && electron-builder --win --publish never --config electron-builder.public.yml",
+    "build:public:mac": "npm run build:legal && electron-builder --mac --config electron-builder.public.yml"
   },
   "keywords": [
     "electron",
