@@ -1,5 +1,7 @@
 # 今日运势 · 桌面桌宠
 
+> 在线产品页（含安装包下载）：<https://cql111.github.io/desktop-icon/>
+>
 > 图文使用说明：打开 [`docs/usage-guide.html`](docs/usage-guide.html)（单文件，截图已内嵌，可直接分享）。
 
 Windows 桌面常驻的透明卡通悬浮球（Electron）。hover 出 4 个签测算运势，养一只会加持分数的精灵，卡片和对话可以用线上或本地大模型做解读。
@@ -150,6 +152,16 @@ npm run release        # 用当前 package.json 版本打 tag 再发布（该 ta
 ```
 
 `scripts/build.js` 是「已有 GH_TOKEN、直接 `publish always`」的捷径，一般用上面的 `release:*` 即可。
+
+## 产品页（GitHub Pages）
+
+在线地址：<https://cql111.github.io/desktop-icon/>
+
+- 源文件是根目录的 `product-intro.html`，通过 `npm run build:site` 复制为 `docs/index.html`
+- Pages 源：`master` 分支 `/docs` 目录（`.nojekyll` 已关闭 Jekyll）
+- 页面上的下载按钮指向 Release 资产（公开版安装包），链接自动附加 `?view_url=true` 让浏览器直接下载
+- **改完产品页记得跑一次 `npm run build:site` 并提交 `docs/index.html`**，否则线上不会更新
+- 发版时下载链接里的版本号需要同步改（`product-intro.html` 中的 `releases/download/vX.Y.Z/...`）
 
 ## 项目结构
 
