@@ -92,12 +92,18 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'search_canon',
-      description: '检索命理典籍原文（周易、滴天髓、渊海子平），返回带出处的原文片段。用于八字格局、十神、五行、卦象等理论问题；引用时必须以返回的原文为准并标注出处。',
+      description: '检索命理典籍原文（周易、三命通会、渊海子平、穷通宝鉴等），返回带出处的原文片段。用于八字格局、十神、五行、卦象等理论问题；引用时必须以返回的原文为准并标注出处。',
       parameters: {
         type: 'object',
         properties: {
           query: { type: 'string', description: '检索关键词，如「财多身弱」「伤官见官」「乾卦」' },
-          book: { type: 'string', enum: ['zhouyi', 'ditiansui', 'yuanhai'], description: '限定书目，可不填' },
+          book: {
+            type: 'string',
+            description: '限定书目 id，可不填',
+            ...(((canon.books() || []).map((b) => b.id).filter(Boolean).length)
+              ? { enum: (canon.books() || []).map((b) => b.id) }
+              : {}),
+          },
         },
         required: ['query'],
       },

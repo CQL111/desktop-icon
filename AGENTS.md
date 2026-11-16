@@ -19,7 +19,7 @@
 
 **三种 Key 来源**：设置面板 `store.aiConfig.token`（user）/ 本机 `.env`（env）/ 构建内置 `resources/bundled-ai.json`（bundled），由 `onlineConfig.resolve(saved, {preferEnv})` 决定。**开发态（`!app.isPackaged`）传 `preferEnv:true`，`.env` 优先**；发布版默认设置面板优先。构建内置：`npm run build:key`（`scripts/build-bundled-key.js` 生成 `build/bundled-ai.json`，`electron-builder.key.yml` 的 `extraResources` 复制；`/build` 已 gitignore）。
 
-**典籍 RAG（本地检索 + 线上模型）**：`scripts/build-canon-index.js` 把 `data/canon/raw/*.txt` 清洗成 `data/canon/index.json`（周易 64 卦 / 滴天髓 19 篇 / 渊海子平 69 节）；`src/js/canon.js` 做繁简归一（配对串必须去空白）、单字+双字分词、BM25 排序与命中摘录。Agent 新增工具 `search_canon`，system prompt 要求「先检索再引用、引用必须是返回原文、标注出处、检索不到要如实说明」。`runAgent` 返回 `citations`，主进程透传，AI 浮窗渲染可展开的「典籍出处」。原始 txt 被 gitignore，只提交清洗后的 index.json。
+**典籍 RAG（本地检索 + 线上模型）**：`scripts/fetch-canon.js` 下载约百本公版（周易注疏、八字、卜筮、堪舆、六壬、奇门等，出处见 `data/canon/SOURCES.md`），`scripts/build-canon-index.js` 把 `data/canon/raw/*.txt` 清洗成 `data/canon/index.json`；`src/js/canon.js` 做繁简归一（配对串必须去空白）、单字+双字分词、BM25 排序与命中摘录。Agent 新增工具 `search_canon`，system prompt 要求「先检索再引用、引用必须是返回原文、标注出处、检索不到要如实说明」。`runAgent` 返回 `citations`，主进程透传，AI 浮窗渲染可展开的「典籍出处」。原始 txt 被 gitignore，只提交清洗后的 index.json。
 
 **真黄历（离线计算）**：`src/js/astro.js`（Meeus 太阳黄经/朔 → 二十四节气、新月）、`src/js/lunar.js`（冬至月定十一月、无中气置闰、农历日期）、`src/js/almanac.js`（日干支 (JDN+49)%60、月柱五虎遁、建除十二值日、黄黑道、冲煞、彭祖百忌、时辰吉凶、规则宜忌）。`fortune.genAlmanac` 优先用新模块，失败才回退旧近似；返回字段只增不改，卡片与缓存兼容。宜忌是规则参考，卡片底部有免责说明。验证锚点写在 smoke-test：春节、闰二月/闰六月、立春/夏至/冬至、日干支连续性。
 

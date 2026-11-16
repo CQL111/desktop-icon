@@ -8,6 +8,7 @@ dist
 feature
 feature.md
 data/canon/raw/
+out-public
 
 # 构建时生成的内置 Key（含密钥，绝不入库）
 /build/bundled-ai.json
