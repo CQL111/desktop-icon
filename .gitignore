@@ -13,3 +13,7 @@ out-public
 # 构建时生成的内置 Key（含密钥，绝不入库）
 /build/bundled-ai.json
 
+
+# 发版时避开 out/out-public 被占用的临时产物目录
+out-public-release
+out-key-release
