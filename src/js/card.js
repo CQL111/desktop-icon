@@ -233,6 +233,16 @@ function renderMoment(f) {
     document.createTextNode(` · ${f.hourRange || ''} · ${f.date}`),
   ]));
 
+  // 主结论：这个时辰按建除/黄黑道到底宜不宜办事（先回答用户最关心的问题）
+  if (f.hourAuspiceText) {
+    const good = f.hourGood !== false;
+    wrap.appendChild(el('div', { class: 'moment-auspice ' + (good ? 'good' : 'bad') }, [
+      el('span', { class: 'moment-auspice-icon' }, [good ? '🟡' : '⚫']),
+      el('span', { class: 'moment-auspice-text' }, [f.hourAuspiceText]),
+      f.hourJianchu ? el('span', { class: 'moment-auspice-tag' }, [`${f.hourJianchu}时`]) : null,
+    ]));
+  }
+
   // 吉言大字号
   wrap.appendChild(el('div', { class: 'moment-quote' }, [f.luckyWord || '']));
   wrap.appendChild(el('div', { class: 'moment-guidance' }, [f.guidance || '']));

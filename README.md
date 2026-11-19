@@ -6,7 +6,13 @@
 
 Windows 桌面常驻的透明卡通悬浮球（Electron）。hover 出 4 个签测算运势，养一只会加持分数的精灵，卡片和对话可以用线上或本地大模型做解读。
 
-当前版本：`1.0.1`（见 `package.json`）。
+当前版本：`1.3.0`（见 `package.json`）。
+
+## 本次更新（v1.3.0）
+
+- **内容每日更新**：个人测算每天重抽（此前种子漏了日期，幸运数字/幸运色天天一样）
+- **此刻运势先看时辰吉凶**：卡片顶部给出当前时辰的建除与黄道/黑道结论
+- **黄历抬头可见**：托盘 tooltip、托盘菜单顶部、每日提醒正文直接显示农历/干支/宜忌；跨天自动刷新
 
 ## 它能做什么
 
@@ -150,6 +156,15 @@ npm run release:minor
 npm run release:major
 npm run release        # 用当前 package.json 版本打 tag 再发布（该 tag 不能已存在）
 ```
+
+一次发版会构建**两个安装包**并上传到同一个 Release：
+
+| 资产 | 内容 | 给谁用 |
+|---|---|---|
+| `fortune-ball-public.Setup.X.Y.Z.exe` | 不带 Key | 公开分发，用户自填 Key |
+| `fortune-ball.Setup.X.Y.Z.exe` | 内置 Key（`build/bundled-ai.json`） | 自用，开箱即用 |
+
+资产名由 `electron-builder.public.yml` / `electron-builder.key.yml` 的 `artifactName` 决定；**产品页下载按钮必须在发版后改成新版本号**（见下节）。
 
 `scripts/build.js` 是「已有 GH_TOKEN、直接 `publish always`」的捷径，一般用上面的 `release:*` 即可。
 

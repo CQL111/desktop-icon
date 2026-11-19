@@ -193,6 +193,51 @@ const profWithAlmanac = fortune.genProfile({ dateKey: todayKey, profile, profile
 assert(profWithAlmanac.styleLabel === '今日个人运势', 'profile 标题改为今日个人运势');
 assert(profWithAlmanac.almanac && profWithAlmanac.almanac.yearGanzhi, 'profile 含黄历数据');
 
+// profile 必须每天重抽：种子含 dateKey（否则个人测算隔天完全一样）
+const profDayA = fortune.genProfile({ dateKey: '2026-11-17', profile, profileMode: 'bazi', installId: 'id-aaa' });
+const profDayB = fortune.genProfile({ dateKey: '2026-11-18', profile, profileMode: 'bazi', installId: 'id-aaa' });
+const profDayA2 = fortune.genProfile({ dateKey: '2026-11-17', profile, profileMode: 'bazi', installId: 'id-aaa' });
+assert(JSON.stringify(profDayA) === JSON.stringify(profDayA2), '同一天 profile 稳定');
+assert(profDayA.luckyColor.hex !== profDayB.luckyColor.hex || profDayA.luckyNum !== profDayB.luckyNum,
+  '不同天 profile 幸运色/数字不同');
+
+// 此刻提点轮转：同一时辰连续两天不重样（池子比天数小，纯随机做不到）
+const hourDay = (dateKey) => fortune.genHourFortune({ dateKey, hourKey: '申' });
+for (const hourKey of ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']) {
+  const g1 = fortune.genHourFortune({ dateKey: '2026-11-17', hourKey }).guidance;
+  const g2 = fortune.genHourFortune({ dateKey: '2026-11-18', hourKey }).guidance;
+  assert(g1 && g2 && g1 !== g2, `${hourKey}时 连续两天提点不同`);
+}
+assert(hourDay('2026-11-18').guidance === hourDay('2026-11-18').guidance, '同一天同一时辰提点稳定');
+
+// ===== P0：内容新鲜度契约 =====
+// ① 今日黄历：连续 14 天必须各自不同（确定性推导，不允许复用）
+const almanacDays = [];
+for (let i = 0; i < 14; i++) {
+  const d = new Date(2026, 10, 1 + i);
+  const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  almanacDays.push({ k, a: fortune.genAlmanac({ dateKey: k }) });
+}
+assert(new Set(almanacDays.map(x => x.a.lunarText)).size === 14, 'P0 14 天农历各不相同');
+assert(new Set(almanacDays.map(x => x.a.dayGanzhi)).size === 14, 'P0 14 天日干支各不相同');
+assert(new Set(almanacDays.map(x => x.a.jianchu)).size >= 6, 'P0 14 天建除覆盖 ≥6 种');
+assert(new Set(almanacDays.map(x => JSON.stringify(x.a.yi))).size >= 8, 'P0 14 天宜忌组合 ≥8 种');
+assert(JSON.stringify(fortune.genAlmanac({ dateKey: '2026-11-19' })) ===
+       JSON.stringify(fortune.genAlmanac({ dateKey: '2026-11-19' })), 'P0 同一天黄历幂等');
+
+// ② 此刻运势的时辰吉凶来自真黄历：一天 12 时辰应与 almanac.hours 一一对应
+const dayAuspice = require('./src/js/almanac').hourAuspice('2026-11-19');
+for (const h of dayAuspice) {
+  const mf = fortune.genHourFortune({ dateKey: '2026-11-19', hourKey: h.name, installId: 'id-aaa' });
+  assert(mf.hourJianchu === h.jianchu && mf.hourGood === h.good,
+    `P0 ${h.name}时 吉凶与黄历一致（${h.jianchu}${h.good ? '·黄道' : '·黑道'}）`);
+}
+const mIdA = fortune.genHourFortune({ dateKey: '2026-11-19', hourKey: '申', installId: 'id-aaa' });
+const mIdB = fortune.genHourFortune({ dateKey: '2026-11-19', hourKey: '申', installId: 'id-bbb' });
+assert(mIdA.hourGood === mIdB.hourGood && mIdA.hourJianchu === mIdB.hourJianchu,
+  'P0 时辰吉凶不受 installId 影响（客观黄历口径）');
+assert(typeof mIdA.hourAuspiceText === 'string' && mIdA.hourAuspiceText.length > 0, 'P0 时辰吉凶有文案');
+
 // moment 融合个人
 const momentWithProfile = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申', profile });
 
@@ -202,8 +247,7 @@ const mA2 = fortune.genHourFortune({ dateKey: todayKey, hourKey: '申', installI
 assert(JSON.stringify(mA) === JSON.stringify(mA2), '同 installId 此刻运势稳定');
 assert(JSON.stringify(mA) !== JSON.stringify(mB), '不同 installId 此刻运势不同');
 const tA = fortune.generate('traditional', { dateKey: '2026-08-20', installId: 'id-aaa' });
-const tB = fortune.generate('traditional', { dateKey: '2026-08-20', installId: 'id-bbb' });
-assert(JSON.stringify(tA) !== JSON.stringify(tB), '不同 installId 今日运势不同');
+const tB = fortune.generate('traditional', { dateKey: '2026-08-20', installId: 'id-bbb' });assert(JSON.stringify(tA) !== JSON.stringify(tB), '不同 installId 今日运势不同');
 assert(momentWithProfile.styleLabel === '此刻个人运势', 'moment 标题改为此刻个人运势');
 assert(momentWithProfile.personal && momentWithProfile.personal.shengxiao === '猪', 'moment 含个人生肖');
 

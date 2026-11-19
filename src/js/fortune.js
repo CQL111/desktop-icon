@@ -289,6 +289,13 @@ function getTodayKey(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+// 距离 1970-01-01 的天数（本地日历日，不带时区偏移）
+function dayOrdinal(dateKey) {
+  const [y, m, d] = String(dateKey || '').split('-').map(Number);
+  if (!y || !m || !d) return 0;
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+}
+
 // ---------- 时辰工具 ----------
 // 把小时（0-23）映射到 12 时辰 key
 const HOUR_TO_KEY = [
@@ -320,8 +327,32 @@ const HOUR_TO_KEY = [
 function getCurrentHourKey(d = new Date()) {
   return HOUR_TO_KEY[d.getHours()];
 }
+const ZHI_ORDER = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 function getHourInfo(hourKey) {
   return hourGuidance[hourKey] || hourGuidance['子'];
+}
+
+// 提点按（日期 + 时辰）轮转：池子比天数小的时候，纯随机几乎必然隔天重样
+function pickHourGuidance(hourKey, dateKey) {
+  const list = getHourInfo(hourKey).guidance || [];
+  if (!list.length) return '';
+  const offset = ZHI_ORDER.indexOf(hourKey);
+  return list[(((dayOrdinal(dateKey) * 2 + offset) % list.length) + list.length) % list.length];
+}
+
+// 真实时辰吉凶（来自 almanac 的建除 + 黄黑道），用于此刻卡片的「是否宜做事」主结论
+function hourAuspiceOf(dateKey, hourKey) {
+  try {
+    const h = almanac.hourAuspice(dateKey).find((x) => x.name === hourKey);
+    if (!h) return null;
+    return {
+      jianchu: h.jianchu,
+      good: h.good,
+      text: h.good ? '黄道吉时，宜办事' : '黑道时，宜静不宜动',
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ---------- ISO 周工具 ----------
@@ -345,7 +376,8 @@ function genHourFortune(ctx) {
   const seedKey = `${ctx.dateKey}|${hourKey}${idPart(ctx)}`;
   const rng = makeRng(seedKey);
   const luckyWord = pick(rng, quotes);
-  const guidance = pick(rng, info.guidance);
+  const guidance = pickHourGuidance(hourKey, ctx.dateKey);
+  const auspice = hourAuspiceOf(ctx.dateKey, hourKey);
   const yi = pickN(rng, yiji.yi, 1 + Math.floor(rng() * 2));
   const ji = pickN(rng, yiji.ji, 1 + Math.floor(rng() * 2));
   const luckyColor = pick(rng, colors.lucky);
@@ -374,6 +406,10 @@ function genHourFortune(ctx) {
     hourName: info.name,
     hourRange: info.range,
     hourIcon: info.icon,
+    // 真实时辰吉凶：建除 + 黄黑道（与今日黄历的吉时列表同一口径）
+    hourJianchu: auspice ? auspice.jianchu : '',
+    hourGood: auspice ? auspice.good : null,
+    hourAuspiceText: auspice ? auspice.text : '',
     luckyWord,
     guidance,
     yi,
@@ -561,7 +597,8 @@ function genProfile(ctx) {
   const [y, m, d] = String(birthday).split('-').map(Number);
   if (!y || !m || !d) throw new Error('NO_BIRTHDAY');
 
-  const rng = makeRng(`profile|${birthday}|${mode}`);
+  // 种子必须含日期（和黄历一样每天重抽），installId 让不同机器不完全同款
+  const rng = makeRng(`profile|${birthday}|${mode}|${ctx.dateKey || ''}${idPart(ctx)}`);
 
   const shengxiao = persona.getShengxiao(y);
   const zodiac = tarot.getZodiac(m, d);

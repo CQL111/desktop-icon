@@ -2,6 +2,8 @@
 # appId 必须与 main.js 里的 app.setAppUserModelId('com.fortune.ball') 保持一致
 appId: com.fortune.ball
 productName: fortune-ball
+# 公开版与内置 Key 版打同一个 Release，资产名必须能区分（产品页下载按钮依赖这个名字）
+artifactName: fortune-ball-public.Setup.${version}.${ext}
 copyright: Copyright © 2026 CQL111
 directories:
   output: out-public

@@ -325,6 +325,7 @@ function recordStreak() {
   if (!result.changed) return result;
   store.set('streak', result.state);
   logger.info('streak', `count=${result.streak} best=${result.state.best}`);
+  if (tray) tray.setToolTip(trayToolTipText());
   if (ballWindow && !ballWindow.isDestroyed()) {
     try { ballWindow.webContents.send('streak-updated', { streak: result.streak, broke: result.broke }); } catch {}
   }
@@ -789,6 +790,52 @@ function broadcastPersona(name) {
 }
 
 // ---------- 托盘 ----------
+// ---------- 黄历摘要（托盘 / 提醒共用）----------
+// 纯离线计算，按天缓存结果，菜单/提醒频繁重建也不重复算
+let almanacInfoDay = '';
+let almanacInfo = null;
+function getTodayAlmanac() {
+  const day = fortune.getTodayKey();
+  if (day !== almanacInfoDay || !almanacInfo) {
+    try {
+      almanacInfo = fortune.genAlmanac({ dateKey: day });
+      almanacInfoDay = day;
+    } catch (e) {
+      logger.warn('almanac', 'summary failed: ' + e.message);
+      return null;
+    }
+  }
+  return almanacInfo;
+}
+
+function almanacOneLiner(a) {
+  if (!a) return '今日运势';
+  return `${a.lunarText} · ${a.dayGanzhi}日 ${a.jianchu} · ${a.huangdaoText}`;
+}
+
+function trayToolTipText() {
+  const st = store.get('streak') || { count: 0 };
+  const streak = st.count > 1 ? ` · 连续 ${st.count} 天` : '';
+  return `${almanacOneLiner(getTodayAlmanac())}${streak}`;
+}
+
+// 跨天自动刷新托盘：长时间挂着不重启，tooltip/菜单也要跟着换
+let dayRolloverTimer = null;
+function startDayRollover() {
+  if (dayRolloverTimer) return;
+  let lastDay = fortune.getTodayKey();
+  dayRolloverTimer = setInterval(() => {
+    const now = fortune.getTodayKey();
+    if (now === lastDay) return;
+    lastDay = now;
+    logger.info('main.dayRollover', `date changed to ${now}`);
+    if (tray) {
+      tray.setToolTip(trayToolTipText());
+      rebuildTrayMenu();
+    }
+  }, 60 * 1000);
+}
+
 function createTray() {
   // 占位图标：1x1 透明（用户后续可替换为真实 ICO）
   const iconPath = path.join(__dirname, 'src', 'assets', 'tray.png');
@@ -809,9 +856,9 @@ function createTray() {
     return;
   }
 
-  const st = store.get('streak') || { count: 0 };
-  tray.setToolTip(st.count > 1 ? `今日运势 · 连续 ${st.count} 天` : '今日运势');
+  tray.setToolTip(trayToolTipText());
   rebuildTrayMenu();
+  startDayRollover();
 }
 
 // 托盘菜单触发抽签（复用球的 draw-fortune 流程）
@@ -823,7 +870,20 @@ function triggerDraw(scope) {
 }
 
 function rebuildTrayMenu() {
+  // 菜单顶部的「今日黄历」只读项：抬头看一眼就够了，不用点开抽签
+  const a = getTodayAlmanac();
+  const almanacItems = a
+    ? [
+        { label: almanacOneLiner(a), enabled: false },
+        {
+          label: `宜 ${(a.yi || []).slice(0, 3).join('·')}　忌 ${(a.ji || []).slice(0, 3).join('·')}`,
+          enabled: false,
+        },
+        { type: 'separator' },
+      ]
+    : [];
   const menu = Menu.buildFromTemplate([
+    ...almanacItems,
     {
       label: '显示悬浮球',
       click: () => {
@@ -2119,6 +2179,7 @@ app.on('will-quit', () => {
   if (cursorPollTimer) clearInterval(cursorPollTimer);
   if (spiritTimer) clearInterval(spiritTimer);
   if (dailyReminderTimer) clearTimeout(dailyReminderTimer);
+  if (dayRolloverTimer) clearInterval(dayRolloverTimer);
 });
 
 // ---------- 主进程轮询光标位置，独立决策 ignore-mouse ----------
@@ -2240,13 +2301,14 @@ function sendDailyReminder() {
   const todayKey = fortune.getTodayKey();
   if (cfg.lastNotifiedDate === todayKey) return; // 当天只提醒一次
   if (!Notification.isSupported()) return;
-  const cached = (store.get('todayFortune') || {})[todayKey];
-  const body = cached && cached.data
-    ? '猫叼来今天的签了，点我看看。'
+  // 提醒正文直接给出今日黄历：用户不点开也知道今天宜忌，比「记得抽签」有用
+  const a = getTodayAlmanac();
+  const body = a
+    ? `${almanacOneLiner(a)}\n宜 ${(a.yi || []).slice(0, 3).join('·')}　忌 ${(a.ji || []).slice(0, 3).join('·')}`
     : '猫在桌角等你，点我抽今天的签。';
   try {
     const n = new Notification({
-      title: '今日运势 · 每日一签',
+      title: `今日黄历 · ${a ? a.dayGanzhi + '日' : '每日一签'}`,
       body,
       silent: false,
     });

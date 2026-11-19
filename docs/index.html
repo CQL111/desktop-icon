@@ -869,6 +869,8 @@
     font-size: 12.5px; color: var(--ink-2); line-height: 1.5;
   }
   .road-aside li::before { content: "·"; color: var(--rose-deep); font-weight: 900; }
+  .dl-aside a { color: var(--rose-deep); text-decoration: none; font-weight: 600; border-bottom: 1px dashed rgba(255, 138, 163, 0.5); }
+  .dl-aside a:hover { border-bottom-style: solid; }
   .road-aside .aside-foot {
     margin-top: 18px; padding-top: 14px;
     border-top: 1px dashed var(--line);
@@ -1039,12 +1041,12 @@
           <div class="cover-meta anim" style="--d:.22s">
             <span>Electron 30</span>
             <span>Windows 10 / 11 · macOS</span>
-            <span>v1.2.0</span>
+            <span>v1.3.0</span>
             <span>离线可用</span>
           </div>
 
           <div class="dl-row anim" style="--d:.28s">
-            <a class="dl-btn" href="https://github.com/CQL111/desktop-icon/releases/download/v1.2.0/fortune-ball-public.Setup.1.2.0.exe">
+            <a class="dl-btn" href="https://github.com/CQL111/desktop-icon/releases/download/v1.3.0/fortune-ball-public.Setup.1.3.0.exe">
               <span class="dl-os">WIN</span>
               <span>Windows 下载<small>安装包 · ~74 MB</small></span>
             </a>
@@ -1493,16 +1495,56 @@
       </div>
     </section>
 
-    <!-- ======================= 12 · Closing ======================= -->
+    <!-- ======================= 12 · 本次更新 ======================= -->
+    <section class="slide" data-theme="light" data-title="本次更新" data-section="更新">
+      <header class="s-head">
+        <div class="kicker"><span class="k-line"></span>11 · 本次更新</div>
+        <h2>v1.3.0 · <span class="grad">内容每天都是新的</span></h2>
+        <p class="lead">这一版只做一件事：让「今日」两个字名副其实。</p>
+      </header>
+
+      <div class="roadmap-grid">
+        <div class="road-list">
+          <div class="road-item anim" style="--d:.04s">
+            <span class="r-index">01</span>
+            <div><b>个人测算不再天天重样</b><p>修复了生成种子里漏掉日期的问题——幸运数字、幸运色、评分现在每天都会重抽。</p></div>
+          </div>
+          <div class="road-item anim" style="--d:.09s">
+            <span class="r-index">02</span>
+            <div><b>此刻运势先看时辰吉凶</b><p>卡片顶部直接给出当前时辰的建除与黄道 / 黑道结论，数据取自真黄历，不再只有随机宜忌。</p></div>
+          </div>
+          <div class="road-item anim" style="--d:.14s">
+            <span class="r-index">03</span>
+            <div><b>黄历抬头可见</b><p>托盘提示、托盘菜单与每日提醒正文都显示当日的农历、干支、宜忌，不用点开卡片。</p></div>
+          </div>
+          <div class="road-item anim" style="--d:.19s">
+            <span class="r-index">04</span>
+            <div><b>跨天自动刷新</b><p>球一直挂在桌面也不怕：跨过零点，托盘内容会自动换成新的一天。</p></div>
+          </div>
+        </div>
+
+        <aside class="road-aside dl-aside anim" style="--d:.16s">
+          <h4>下载</h4>
+          <ul>
+            <li><a href="https://github.com/CQL111/desktop-icon/releases/download/v1.3.0/fortune-ball-public.Setup.1.3.0.exe">公开版（不带 Key）</a></li>
+            <li><a href="https://github.com/CQL111/desktop-icon/releases/download/v1.3.0/fortune-ball.Setup.1.3.0.exe">内置 Key 版（开箱即用）</a></li>
+            <li>从 v1.2.0 升级：直接覆盖安装即可，原有配置保留</li>
+          </ul>
+          <div class="aside-foot">测运势 · 看黄历 · 养精灵 · 问 AI ——全部离线可用。</div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ======================= 13 · Closing ======================= -->
     <section class="slide closing" data-theme="dark" data-title="结尾" data-section="结尾">
       <div class="end-ball anim"></div>
       <h2 class="anim" style="--d:.06s">球在，<span class="grad">运气就在。</span></h2>
       <p class="end-sub anim" style="--d:.12s">
-        今日运势 · 桌面悬浮球 &nbsp;v1.2.0<br>
+        今日运势 · 桌面悬浮球 &nbsp;v1.3.0<br>
         一枚安静待在桌角的小球，随时准备回答你的今天。
       </p>
       <div class="dl-row anim" style="--d:.16s">
-        <a class="dl-btn" href="https://github.com/CQL111/desktop-icon/releases/download/v1.2.0/fortune-ball-public.Setup.1.2.0.exe">
+        <a class="dl-btn" href="https://github.com/CQL111/desktop-icon/releases/download/v1.3.0/fortune-ball-public.Setup.1.3.0.exe">
           <span class="dl-os">WIN</span>
           <span>Windows 下载<small>安装包 · ~74 MB</small></span>
         </a>

@@ -152,6 +152,20 @@ README.md           项目说明（略过时，以本文为准）
 - 卡片首次打开时 webContents 还在加载：解读先挂 `cardWindow._pendingAi`，`did-finish-load` 再补发；`card.js` 会校验 payload.style，避免旧解读串到新卡片
 - `ai.diagnose()`：日志检测到 error → AI 分析 → 系统通知（只有 critical 才弹通知）
 
+### 5.5 内容新鲜度契约（P0，改生成器前必读）
+
+产品的核心承诺是「今天和昨天不一样」。以下三条是**可验收的契约**，`smoke-test.js` 里以 `P0:` 开头的断言在守：
+
+| 内容 | 契约 | 实现要点 |
+|---|---|---|
+| 今日黄历 | 严格由 `dateKey` 确定性推导，跨天必变 | `almanac.getDay()`；**不要对真黄历做随机化**，变化只能来自日期推进 |
+| 个人测算 | 每日重抽且同日稳定 | `genProfile` 种子 = `profile\|生日\|模式\|dateKey\|installId` |
+| 此刻运势 | 同一时辰连续两天提点不同、同日稳定 | 提点走 `pickHourGuidance()` 按（日期+时辰）**轮转**，不是随机抽 |
+
+- **新的带日期内容，种子必须含 `dateKey`**（否则跨天返回同一份；`genProfile` 踩过这个坑）
+- 文案池比「可能出现的天数」小时，随机抽几乎必然重样 → 用轮转
+- 时辰吉凶是**客观黄历口径**：`genHourFortune` 的 `hourJianchu / hourGood / hourAuspiceText` 取自 `almanac.hourAuspice(dateKey)`，不受 `installId` 影响
+
 ## 六、store 数据结构（electron-store defaults）
 
 ```js
@@ -205,14 +219,19 @@ README.md           项目说明（略过时，以本文为准）
     - canvas 的 DPR 上限 1.5、4K 上粒子数降级，避免帧率导致时长被拉长；
     - 暗场衬底决定浅色桌面上粒子是否可见，调低会"看不见动画"。
 11. **个人运势缓存 key 必须带日期**：`profile|birthday|mode|YYYY-MM-DD`，否则跨天会返回昨天的结果。
-12. **自检里的环境项**（online-token / local-llm / shortcut）标 `optional`，失败只记 warn，不触发 AI 诊断；快捷键被占用属正常情况。
+12. **生成器种子必须含 `dateKey`**：`genProfile` 曾因种子只有生日+模式，导致幸运数字/幸运色天天一样（见 5.5）。带日期的内容池比天数小时用轮转，不要纯随机抽。
+13. **黄历要「抬头可见」**：托盘 tooltip、托盘菜单顶部、每日提醒正文都通过 `main.js` 的 `getTodayAlmanac()` 透出黄历摘要；`startDayRollover()` 每分钟比对日期，跨天自动刷新托盘，长挂不重启也能换内容。
+14. **自检里的环境项**（online-token / local-llm / shortcut）标 `optional`，失败只记 warn，不触发 AI 诊断；快捷键被占用属正常情况。
 
 ## 九、当前状态
 
-- ✅ 核心功能全部跑通（172 测试全过）
+- ✅ 核心功能全部跑通（250 测试全过）
 - ✅ 黄历整合 + 个人运势 + 运势精灵完成
+- ✅ 内容新鲜度契约（5.5）落地：黄历/个人测算/此刻运势跨天必变，profile 种子含日期，时辰提点轮转，此刻卡片接入真实时辰吉凶
+- ✅ 黄历「抬头可见」：托盘 tooltip / 菜单顶部 / 每日提醒正文均输出当日摘要，跨天自动刷新
 - ✅ AI 解读两条抽签路径均已接通；解读不再丢失、不重复叠加、不跨卡片串台
 - ⚠️ 截至 2026-11-10 本机 `.env` 与设置面板里的 DeepSeek Key 均返回 401，需到控制台轮换后重新填写
+- ✅ v1.3.0 起一次发版同时产出公开版与内置 Key 版（`artifactName` 区分），产品页下载链接必须随版本号同步
 - ⏳ 待办（`feature.md`）：位置调运势、多信息推断、推荐方案、天气位置、分类/一键提升
 
 ## 十、改一个功能的典型路径

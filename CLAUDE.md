@@ -6,7 +6,7 @@
 
 - **产品**：今日运势 · 桌面桌宠（fortune-ball）— Windows 桌面悬浮球 / 团子猫，看今日运势与黄历
 - **核心资产**：真黄历引擎（`astro/lunar/almanac`）、典籍 RAG（`canon.js`）、桌宠 UI、Agent 工具调用
-- **版本**：1.2.0（已发布 GitHub Release）
+- **版本**：1.3.0（已发布 GitHub Release；公开版 + 内置 Key 版双资产）
 
 ## 关联项目
 
